@@ -1,25 +1,32 @@
-SGA Club Management System is a full-stack web application to streamline administration, lesson booking, and membership payments for Submission Grappling Antwerp.
+# SGA Club Management System
 
-Tech Stack:
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Frontend: Next.js + Tailwind CSS
+A web application for managing memberships, lessons, and payments for **Submission Grappling Antwerp**. Built with **Next.js (frontend)**, **NestJS (backend)**, and **PostgreSQL**, integrated with **Stripe** for payments. Designed as a scalable template for future gyms.
 
-Backend: NestJS (REST API, JWT auth)
+---
 
-Database: PostgreSQL (Supabase)
+## 🚀 Features
 
-Payments: Stripe integration
+- Member registration and profile management  
+- Subscription management and online payments  
+- Lesson reservation with capacity tracking  
+- Admin dashboard to monitor users and lessons  
 
-Hosting: Vercel (frontend), Railway (backend)
+---
 
-Key Features:
+## 🛠 Tech Stack
 
-Member registration & profile management
+- **Frontend:** Next.js + Tailwind CSS  
+- **Backend:** NestJS (REST API, JWT authentication)  
+- **Database:** PostgreSQL (Supabase)  
+- **Payments:** Stripe integration  
+- **Hosting:** Vercel (frontend), Railway (backend)
 
-Subscription management & online payments
+---
 
-Lesson reservation & capacity tracking
+## 📦 Setup / Installation
 
-Admin dashboard for monitoring users and lessons
-
-Goal: Serve as an MVP for SGA and a reusable SaaS template for other gyms.
+1. Clone the repository:  
+```bash
+git clone https://github.com/your-username/sga-club-management.git
