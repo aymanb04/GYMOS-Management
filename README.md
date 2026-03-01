@@ -1,4 +1,4 @@
-# SGA Club Management System
+# GYMOS Club Management System
 
 **License:** MIT
 
