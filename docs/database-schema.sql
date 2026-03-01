@@ -24,17 +24,16 @@ CREATE TABLE membership_plans (
 
 -- 3️⃣ Users (leden)
 CREATE TABLE users (
-                       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                       gym_id UUID REFERENCES gyms(id) ON DELETE CASCADE,
-                       membership_plan_id UUID REFERENCES membership_plans(id),
-                       name TEXT NOT NULL,
-                       email TEXT NOT NULL,
-                       password_hash TEXT NOT NULL,
-                       role TEXT CHECK (role IN ('admin','coach','member')) DEFAULT 'member',
-                       membership_expires_at TIMESTAMP,
-                       active BOOLEAN DEFAULT true,
-                       created_at TIMESTAMP DEFAULT NOW(),
-                       UNIQUE (gym_id, email)
+                        id UUID PRIMARY KEY,  -- komt van Supabase Auth
+                        gym_id UUID REFERENCES gyms(id) ON DELETE CASCADE,
+                        membership_plan_id UUID REFERENCES membership_plans(id),
+                        name TEXT NOT NULL,
+                        email TEXT NOT NULL,
+                        role TEXT CHECK (role IN ('admin','coach','member')) DEFAULT 'member',
+                        membership_expires_at TIMESTAMP,
+                        active BOOLEAN DEFAULT true,
+                        created_at TIMESTAMP DEFAULT NOW(),
+                        UNIQUE (gym_id, email)
 );
 
 -- 4️⃣ Lessons (per gym)
@@ -69,53 +68,94 @@ CREATE TABLE payments (
                           created_at TIMESTAMP DEFAULT NOW()
 );
 
--- =============================
--- 7️⃣ Dummy data voor MVP
--- =============================
 
--- Gyms
-INSERT INTO gyms (name, email)
-VALUES
-    ('Submission Grappling Antwerp', 'info@sga.be'),
-    ('TK Gym', 'info@tk.be');
-
--- Membership Plans
-INSERT INTO membership_plans (gym_id, name, price, duration_months)
-VALUES
-    ((SELECT id FROM gyms WHERE name='Submission Grappling Antwerp'), 'Basic', 50, 1),
-    ((SELECT id FROM gyms WHERE name='Submission Grappling Antwerp'), 'Unlimited', 80, 1),
-    ((SELECT id FROM gyms WHERE name='TK Gym'), 'Standard', 40, 1);
-
--- Users
-INSERT INTO users (gym_id, membership_plan_id, name, email, password_hash, role, membership_expires_at, active)
-VALUES
-    ((SELECT id FROM gyms WHERE name='Submission Grappling Antwerp'),
-     (SELECT id FROM membership_plans WHERE name='Basic' AND gym_id=(SELECT id FROM gyms WHERE name='Submission Grappling Antwerp')),
-     'Jan Leden', 'jan@sga.be', 'hashedpassword1', 'member', NOW() + INTERVAL '1 month', true),
-    ((SELECT id FROM gyms WHERE name='Submission Grappling Antwerp'),
-     (SELECT id FROM membership_plans WHERE name='Unlimited' AND gym_id=(SELECT id FROM gyms WHERE name='Submission Grappling Antwerp')),
-     'Sara Coach', 'sara@sga.be', 'hashedpassword2', 'coach', NOW() + INTERVAL '1 month', true),
-    ((SELECT id FROM gyms WHERE name='TK Gym'),
-     (SELECT id FROM membership_plans WHERE name='Standard' AND gym_id=(SELECT id FROM gyms WHERE name='TK Gym')),
-     'Tom Leden', 'tom@tk.be', 'hashedpassword3', 'member', NOW() + INTERVAL '1 month', true);
-
--- Lessons
-INSERT INTO lessons (gym_id, title, capacity, schedule)
-VALUES
-    ((SELECT id FROM gyms WHERE name='Submission Grappling Antwerp'), 'Beginner Grappling', 10, NOW() + INTERVAL '1 day'),
-    ((SELECT id FROM gyms WHERE name='Submission Grappling Antwerp'), 'Advanced Grappling', 15, NOW() + INTERVAL '2 days');
-
--- Reservations
-INSERT INTO reservations (gym_id, user_id, lesson_id, status)
-VALUES
-    ((SELECT id FROM gyms WHERE name='Submission Grappling Antwerp'),
-     (SELECT id FROM users WHERE email='jan@sga.be'),
-     (SELECT id FROM lessons WHERE title='Beginner Grappling' AND gym_id=(SELECT id FROM gyms WHERE name='Submission Grappling Antwerp')),
-     'booked');
-
--- Payments
-INSERT INTO payments (gym_id, user_id, amount, status, stripe_payment_id)
-VALUES
-    ((SELECT id FROM gyms WHERE name='Submission Grappling Antwerp'),
-     (SELECT id FROM users WHERE email='jan@sga.be'),
-     50, 'paid', 'stripe_dummy_1');
+--users mogen zichzelf zien
+CREATE POLICY "users_select_own"
+ON public.users
+FOR SELECT
+               USING (auth.uid() = id);
+--users mogen enkel zichzelf updaten
+CREATE POLICY "users_update_own"
+ON public.users
+FOR UPDATE
+               USING (auth.uid() = id)
+    WITH CHECK (auth.uid() = id);
+--Select enkel binnen eigen gym
+CREATE POLICY "lessons_select_gym"
+ON public.lessons
+FOR SELECT
+               USING (
+               gym_id = (
+               SELECT gym_id FROM public.users
+               WHERE id = auth.uid()
+               )
+               );
+--
+CREATE POLICY "membership_plans_select_gym"
+ON public.membership_plans
+FOR SELECT
+               USING (
+               gym_id = (
+               SELECT gym_id FROM public.users
+               WHERE id = auth.uid()
+               )
+               );
+--
+CREATE POLICY "reservations_select_gym"
+ON public.reservations
+FOR SELECT
+               USING (
+               gym_id = (
+               SELECT gym_id FROM public.users
+               WHERE id = auth.uid()
+               )
+               );
+--Insert alleen voor eigen gym én eigen user_id
+CREATE POLICY "reservations_insert_secure"
+ON public.reservations
+FOR INSERT
+WITH CHECK (
+    gym_id = (
+        SELECT gym_id FROM public.users
+        WHERE id = auth.uid()
+    )
+    AND user_id = auth.uid()
+);
+--Update alleen eigen reservatie
+CREATE POLICY "reservations_update_own"
+ON public.reservations
+FOR UPDATE
+                      USING (user_id = auth.uid())
+    WITH CHECK (user_id = auth.uid());
+--select binnen eigen gym
+CREATE POLICY "payments_select_gym"
+ON public.payments
+FOR SELECT
+               USING (
+               gym_id = (
+               SELECT gym_id FROM public.users
+               WHERE id = auth.uid()
+               )
+               );
+--insert alleen eigen payment
+CREATE POLICY "payments_insert_secure"
+ON public.payments
+FOR INSERT
+WITH CHECK (
+    gym_id = (
+        SELECT gym_id FROM public.users
+        WHERE id = auth.uid()
+    )
+    AND user_id = auth.uid()
+);
+--User mag enkel eigen gym zien
+CREATE POLICY "gyms_select_own"
+ON public.gyms
+FOR SELECT
+                      USING (
+                      id = (
+                      SELECT gym_id FROM public.users
+                      WHERE id = auth.uid()
+                      )
+                      );
+--

@@ -30,3 +30,4 @@ A web application for managing memberships, lessons, and payments for **Submissi
 1. **Clone the repository**  
 ```bash
 git clone https://github.com/your-username/sga-club-management.git
+
