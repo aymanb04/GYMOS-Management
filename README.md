@@ -21,7 +21,7 @@ A web application for managing memberships, lessons, and payments for **Submissi
 - **Backend:** NestJS (REST API, JWT authentication)  
 - **Database:** PostgreSQL (Supabase)  
 - **Payments:** Stripe integration  
-- **Hosting:** Vercel (frontend), Railway (backend)  
+- **Hosting:** Vercel (frontend)
 
 ---
 
