@@ -16,14 +16,14 @@ const NAV = [
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const { user, logout, loading } = useAuth();
+    const { gym } = useGym();
+    const pathname = usePathname();
+    const router = useRouter();
     useEffect(() => {
         if (!loading && user?.role === 'member') {
             router.replace('/member');
         }
-    }, [user, loading]);
-    const { gym } = useGym();
-    const pathname = usePathname();
-    const router = useRouter();
+    }, [user, loading, router]);
 
     const handleLogout = () => {
         logout();

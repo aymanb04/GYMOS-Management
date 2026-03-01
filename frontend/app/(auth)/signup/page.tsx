@@ -12,6 +12,7 @@ export default function SignupPage() {
 
     const [name, setName]         = useState("");
     const [email, setEmail]       = useState("");
+    const [phone, setPhone]       = useState("");
     const [password, setPassword] = useState("");
     const [error, setError]       = useState("");
     const [loading, setLoading]   = useState(false);
@@ -30,7 +31,8 @@ export default function SignupPage() {
                 email,
                 password,
                 name,
-                gymId: gym.id,  // gym_id comes from subdomain, no picker needed
+                phone: phone.trim() || undefined,
+                gymId: gym.id,
             });
             router.push("/login");
         } catch (err: unknown) {
@@ -51,13 +53,10 @@ export default function SignupPage() {
 
     return (
         <div className="split">
-            {/* ── LEFT ── */}
             <div className="panel-left">
                 <div className="noise" />
                 <div className="accent-bar" />
-
                 <div className="logo">{gymName}</div>
-
                 <div style={{ position: "relative", zIndex: 2 }}>
                     <p className="eyebrow">Join {gymName}</p>
                     <h2 className="hero-title">
@@ -70,7 +69,6 @@ export default function SignupPage() {
                         clarity — built local, for gyms that mean business.
                     </p>
                 </div>
-
                 <div className="stats">
                     <div>
                         <div className="stat-num">1 app</div>
@@ -83,7 +81,6 @@ export default function SignupPage() {
                 </div>
             </div>
 
-            {/* ── RIGHT ── */}
             <div className="panel-right">
                 <div className="form-wrap slide-in">
                     <h2 className="fh">
@@ -92,11 +89,7 @@ export default function SignupPage() {
                         account
                     </h2>
                     <p className="fs">
-                        {gymLoading
-                            ? "Loading..."
-                            : gym
-                                ? `Joining ${gym.name}.`
-                                : "Get started in minutes."}
+                        {gymLoading ? "Loading..." : gym ? `Joining ${gym.name}.` : "Get started in minutes."}
                     </p>
 
                     {error && <div className="error-msg">{error}</div>}
@@ -116,11 +109,23 @@ export default function SignupPage() {
                         <label>Email</label>
                         <input
                             type="email"
-                            placeholder="alex@ironforge.be"
+                            placeholder="alex@example.be"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             onKeyDown={onKey}
                             autoComplete="email"
+                        />
+                    </div>
+
+                    <div className="field">
+                        <label>Phone <span style={{ color: "var(--muted2)", fontWeight: 300 }}>(optional)</span></label>
+                        <input
+                            type="tel"
+                            placeholder="+32 400 00 00 00"
+                            value={phone}
+                            onChange={(e) => setPhone(e.target.value)}
+                            onKeyDown={onKey}
+                            autoComplete="tel"
                         />
                     </div>
 
