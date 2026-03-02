@@ -55,7 +55,7 @@ export function GymProvider({ children }: { children: ReactNode }) {
 
     async function fetchGym(subdomain: string) {
         try {
-            const base = "http://localhost:3001/api";
+            const base = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api";
             const res = await fetch(`${base}/gyms/resolve?subdomain=${subdomain}`);
 
             if (!res.ok) {
