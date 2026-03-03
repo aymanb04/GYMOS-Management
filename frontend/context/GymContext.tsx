@@ -48,6 +48,11 @@ export function GymProvider({ children }: { children: ReactNode }) {
     const [gymLoading, setLoading] = useState(true);
     const [gymError, setError]     = useState<string | null>(null);
 
+    /*useEffect(() => {
+        const hostname = window.location.hostname;
+        const subdomain = extractSubdomain(hostname) ?? DEV_SUBDOMAIN;
+        fetchGym(subdomain);
+    }, []);*/
     useEffect(() => {
         const hostname = window.location.hostname;
         const subdomain = extractSubdomain(hostname);

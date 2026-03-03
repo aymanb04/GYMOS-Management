@@ -4,7 +4,7 @@
    White-labeling: only --accent needs to change per gym client.
    ─────────────────────────────────────────────────────────────────────────── */
 :root {
-    --accent:        #CAFF00;
+    --accent:        #32332e;
     --accent-glow:   rgba(202, 255, 0, 0.13);
     --accent-subtle: rgba(202, 255, 0, 0.06);
     --accent-border: rgba(202, 255, 0, 0.2);
