@@ -40,7 +40,8 @@ function extractSubdomain(hostname: string): string | null {
 }
 
 // Change this to 'tkgym' when testing TK Gym locally
-const DEV_SUBDOMAIN = "sga";
+//const DEV_SUBDOMAIN = "sga";
+const DEV_SUBDOMAIN = process.env.NODE_ENV === "development" ? "sga" : null;
 
 export function GymProvider({ children }: { children: ReactNode }) {
     const [gym, setGym]            = useState<Gym | null>(null);
@@ -49,7 +50,18 @@ export function GymProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         const hostname = window.location.hostname;
-        const subdomain = extractSubdomain(hostname) ?? DEV_SUBDOMAIN;
+        const subdomain = extractSubdomain(hostname);
+
+        if (!subdomain) {
+            if (process.env.NODE_ENV === "development") {
+                fetchGym("sga");
+            } else {
+                // Production with no subdomain — no gym to load
+                setLoading(false);
+            }
+            return;
+        }
+
         fetchGym(subdomain);
     }, []);
 
