@@ -2,14 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { useGym } from "@/context/GymContext";
 import { api } from "@/lib/api";
-
-interface Stats {
-    gymName: string;
-    memberCount: number;
-    monthlyRevenue: number;
-    checkinsToday: number;
-}
 
 interface Member {
     id: string;
@@ -18,6 +12,7 @@ interface Member {
     role: string;
     active: boolean;
     created_at: string;
+    membership_expires_at: string | null;
 }
 
 function formatEuro(amount: number) {
@@ -38,8 +33,8 @@ function formatDate(iso: string) {
 
 export default function DashboardPage() {
     const { user } = useAuth();
+    const { gym } = useGym();
 
-    const [stats, setStats]     = useState<Stats | null>(null);
     const [members, setMembers] = useState<Member[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -53,19 +48,18 @@ export default function DashboardPage() {
     useEffect(() => {
         if (!user?.gym_id) return;
 
-        const gymId = user.gym_id;
-
-        Promise.all([
-            api.get<Stats>(`/gyms/${gymId}/stats`),
-            api.get<Member[]>(`/gyms/${gymId}/members`),
-        ])
-            .then(([statsRes, membersRes]) => {
-                setStats(statsRes.data);
-                setMembers(membersRes.data);
-            })
+        api.get<Member[]>("/members")
+            .then((res) => setMembers(res.data))
             .catch(console.error)
             .finally(() => setLoading(false));
     }, [user?.gym_id]);
+
+    const activeCount   = members.filter((m) => m.active).length;
+    const inactiveCount = members.filter((m) => !m.active).length;
+    const expiringCount = members.filter(
+        (m) => m.active && m.membership_expires_at &&
+            new Date(m.membership_expires_at) < new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+    ).length;
 
     if (loading) {
         return (
@@ -77,55 +71,49 @@ export default function DashboardPage() {
 
     return (
         <>
-            {/* Header */}
+            {/* ── HEADER ── */}
             <div className="dash-header">
                 <div>
                     <div className="dash-title">Overview</div>
-                    {stats?.gymName && (
-                        <div
-                            style={{
-                                fontSize: 13,
-                                color: "var(--muted2)",
-                                marginTop: 4,
-                                letterSpacing: "0.05em",
-                            }}
-                        >
-                            {stats.gymName}
+                    {gym?.name && (
+                        <div style={{
+                            fontSize: 13, color: "var(--muted2)",
+                            marginTop: 4, letterSpacing: "0.05em",
+                        }}>
+                            {gym.name}
                         </div>
                     )}
                 </div>
                 <div className="dash-date">{today}</div>
             </div>
 
-            {/* KPIs */}
+            {/* ── KPIs ── */}
             <div className="kpi-grid">
                 <div className="kpi-card">
-                    <div className="kpi-label">Active Members</div>
-                    <div className="kpi-val">{stats?.memberCount ?? 0}</div>
-                    <div className="kpi-delta">↑ this month</div>
+                    <div className="kpi-label">Total Members</div>
+                    <div className="kpi-val">{members.length}</div>
+                    <div className="kpi-delta">{activeCount} active</div>
                 </div>
 
                 <div className="kpi-card">
-                    <div className="kpi-label">Monthly Revenue</div>
-                    <div className="kpi-val">
-                        {formatEuro(stats?.monthlyRevenue ?? 0)}
-                    </div>
-                    <div className="kpi-delta">paid invoices</div>
+                    <div className="kpi-label">Inactive Members</div>
+                    <div className="kpi-val">{inactiveCount}</div>
+                    <div className="kpi-delta">deactivated accounts</div>
                 </div>
 
                 <div className="kpi-card">
-                    <div className="kpi-label">Check-ins Today</div>
-                    <div className="kpi-val">{stats?.checkinsToday ?? 0}</div>
-                    <div className="kpi-delta">attended reservations</div>
+                    <div className="kpi-label">Expiring Soon</div>
+                    <div className="kpi-val">{expiringCount}</div>
+                    <div className="kpi-delta">within 7 days</div>
                 </div>
             </div>
 
-            {/* Members table */}
+            {/* ── RECENT MEMBERS ── */}
             <div className="dash-grid2">
                 <div>
                     <div className="section-head">
                         <span className="section-title">Recent Members</span>
-                        <span className="section-link">View all →</span>
+                        <a href="/dashboard/members" className="section-link">View all →</a>
                     </div>
 
                     <div className="member-table">
@@ -136,31 +124,25 @@ export default function DashboardPage() {
                         </div>
 
                         {members.length === 0 ? (
-                            <div
-                                style={{
-                                    padding: "32px 20px",
-                                    textAlign: "center",
-                                    color: "var(--muted2)",
-                                    fontSize: 14,
-                                }}
-                            >
+                            <div style={{
+                                padding: "32px 20px", textAlign: "center",
+                                color: "var(--muted2)", fontSize: 14,
+                            }}>
                                 No members yet.
                             </div>
                         ) : (
-                            members.map((m) => (
+                            members.slice(0, 8).map((m) => (
                                 <div key={m.id} className="mt-row cols-3">
                                     <div>
                                         <div className="mt-name">{m.name}</div>
                                         <div className="mt-email">{m.email}</div>
                                     </div>
                                     <div>
-                    <span className={`badge ${m.active ? "active" : "inactive"}`}>
-                      {m.active ? "active" : "inactive"}
-                    </span>
+                                        <span className={`badge ${m.active ? "active" : "inactive"}`}>
+                                            {m.active ? "active" : "inactive"}
+                                        </span>
                                     </div>
-                                    <div
-                                        style={{ fontSize: 12, color: "var(--muted2)" }}
-                                    >
+                                    <div style={{ fontSize: 12, color: "var(--muted2)" }}>
                                         {formatDate(m.created_at)}
                                     </div>
                                 </div>
@@ -169,27 +151,35 @@ export default function DashboardPage() {
                     </div>
                 </div>
 
-                {/* Activity feed placeholder */}
+                {/* ── ACTIVITY ── */}
                 <div>
                     <div className="section-head">
                         <span className="section-title">Activity</span>
                     </div>
                     <div className="activity-panel">
-                        {[
-                            { text: `${members[0]?.name ?? "A member"} checked in`, time: "just now" },
-                            { text: "Monthly revenue updated", time: "1 hr ago" },
-                            { text: "New member registered", time: "2 hrs ago" },
-                            { text: "Membership plan renewed", time: "3 hrs ago" },
-                            { text: "Class at capacity", time: "4 hrs ago" },
-                        ].map((a, i) => (
+                        {expiringCount > 0 && (
+                            <div className="act-item">
+                                <div className="act-dot" style={{ background: "var(--danger)" }} />
+                                <div>
+                                    <div className="act-text">{expiringCount} membership{expiringCount !== 1 ? "s" : ""} expiring soon</div>
+                                    <div className="act-time">within 7 days</div>
+                                </div>
+                            </div>
+                        )}
+                        {members.slice(0, 4).map((m, i) => (
                             <div key={i} className="act-item">
                                 <div className="act-dot" />
                                 <div>
-                                    <div className="act-text">{a.text}</div>
-                                    <div className="act-time">{a.time}</div>
+                                    <div className="act-text">{m.name} joined</div>
+                                    <div className="act-time">{formatDate(m.created_at)}</div>
                                 </div>
                             </div>
                         ))}
+                        {members.length === 0 && (
+                            <div style={{ color: "var(--muted2)", fontSize: 14, padding: "20px 0" }}>
+                                No recent activity.
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
