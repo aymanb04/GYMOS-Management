@@ -1,0 +1,111 @@
+import {
+    Injectable,
+    NotFoundException,
+    ForbiddenException,
+} from '@nestjs/common';
+import { SupabaseService } from '../supabase.service';
+import { CreatePlanDto } from './dto/create-plan.dto';
+
+@Injectable()
+export class PlansService {
+    constructor(private readonly supabase: SupabaseService) {}
+
+    private async getAdminGymId(jwt: string): Promise<string> {
+        const client = this.supabase.getUserClient(jwt);
+        const { data: authData } = await client.auth.getUser();
+        if (!authData.user) throw new ForbiddenException('Invalid token');
+
+        const { data: profile } = await this.supabase.getServiceClient()
+            .from('users')
+            .select('gym_id, role')
+            .eq('id', authData.user.id)
+            .single();
+
+        if (!profile) throw new ForbiddenException('User profile not found');
+        if (profile.role !== 'admin') throw new ForbiddenException('Admins only');
+
+        return profile.gym_id;
+    }
+
+    async findAll(jwt: string) {
+        const gymId = await this.getAdminGymId(jwt);
+        const { data, error } = await this.supabase.getServiceClient()
+            .from('membership_plans')
+            .select('id, name, price, duration_months, description, created_at')
+            .eq('gym_id', gymId)
+            .order('price', { ascending: true });
+
+        if (error) throw new Error(error.message);
+        return data ?? [];
+    }
+
+    async create(dto: CreatePlanDto, jwt: string) {
+        const gymId = await this.getAdminGymId(jwt);
+        const { data, error } = await this.supabase.getServiceClient()
+            .from('membership_plans')
+            .insert({
+                gym_id: gymId,
+                name: dto.name,
+                price: dto.price,
+                duration_months: dto.duration_months,
+                description: dto.description ?? null,
+            })
+            .select()
+            .single();
+
+        if (error) throw new Error(error.message);
+        return data;
+    }
+
+    async update(planId: string, dto: Partial<CreatePlanDto>, jwt: string) {
+        const gymId = await this.getAdminGymId(jwt);
+
+        // Verify plan belongs to this gym
+        const { data: existing } = await this.supabase.getServiceClient()
+            .from('membership_plans')
+            .select('id')
+            .eq('id', planId)
+            .eq('gym_id', gymId)
+            .single();
+
+        if (!existing) throw new NotFoundException('Plan not found');
+
+        const { data, error } = await this.supabase.getServiceClient()
+            .from('membership_plans')
+            .update({
+                name: dto.name,
+                price: dto.price,
+                duration_months: dto.duration_months,
+                description: dto.description ?? null,
+            })
+            .eq('id', planId)
+            .eq('gym_id', gymId)
+            .select()
+            .single();
+
+        if (error) throw new Error(error.message);
+        return data;
+    }
+
+    async remove(planId: string, jwt: string) {
+        const gymId = await this.getAdminGymId(jwt);
+
+        const { data: existing } = await this.supabase.getServiceClient()
+            .from('membership_plans')
+            .select('id')
+            .eq('id', planId)
+            .eq('gym_id', gymId)
+            .single();
+
+        if (!existing) throw new NotFoundException('Plan not found');
+
+        const { error } = await this.supabase.getServiceClient()
+            .from('membership_plans')
+            .delete()
+            .eq('id', planId)
+            .eq('gym_id', gymId);
+
+        if (error) throw new Error(error.message);
+        return { message: 'Plan deleted' };
+    }
+}
