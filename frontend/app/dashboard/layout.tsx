@@ -9,6 +9,7 @@ import {useEffect} from "react";
 const NAV = [
     { href: "/dashboard",          label: "Overview",  icon: "▦" },
     { href: "/dashboard/members",  label: "Members",   icon: "◎" },
+    { href: "/dashboard/plans",    label: "Plans",     icon: "◇" },
     { href: "/dashboard/classes",  label: "Classes",   icon: "⊡" },
     { href: "/dashboard/revenue",  label: "Revenue",   icon: "◈" },
     { href: "/dashboard/settings", label: "Settings",  icon: "⊙" },
