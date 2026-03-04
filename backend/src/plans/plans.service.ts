@@ -2,6 +2,7 @@ import {
     Injectable,
     NotFoundException,
     ForbiddenException,
+    BadRequestException,
 } from '@nestjs/common';
 import { SupabaseService } from '../supabase.service';
 import { CreatePlanDto } from './dto/create-plan.dto';
@@ -90,14 +91,17 @@ export class PlansService {
     async remove(planId: string, jwt: string) {
         const gymId = await this.getAdminGymId(jwt);
 
-        const { data: existing } = await this.supabase.getServiceClient()
-            .from('membership_plans')
-            .select('id')
-            .eq('id', planId)
-            .eq('gym_id', gymId)
-            .single();
+        // Check if any members are on this plan
+        const { count } = await this.supabase.getServiceClient()
+            .from('users')
+            .select('id', { count: 'exact', head: true })
+            .eq('membership_plan_id', planId);
 
-        if (!existing) throw new NotFoundException('Plan not found');
+        if (count && count > 0) {
+            throw new BadRequestException(
+                `Cannot delete — ${count} member${count !== 1 ? 's are' : ' is'} on this plan. Reassign them first.`
+            );
+        }
 
         const { error } = await this.supabase.getServiceClient()
             .from('membership_plans')
