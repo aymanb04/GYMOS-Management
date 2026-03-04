@@ -118,91 +118,114 @@ export default function MemberPage() {
                         <span className="hi">{user?.name?.split(" ")[0]}.</span>
                     </h1>
 
-                    {/* Membership card */}
-                    <div style={{
-                        background: "var(--surface)", border: "1px solid var(--border)",
-                        borderRadius: 16, padding: 32, marginBottom: 16,
-                        position: "relative", overflow: "hidden",
-                    }}>
-                        {/* accent line */}
+                    {/* ── DEACTIVATED STATE ── */}
+                    {profile && !profile.active ? (
                         <div style={{
-                            position: "absolute", top: 0, left: 0, right: 0, height: 3,
-                            background: isExpired
-                                ? "var(--danger)"
-                                : "linear-gradient(90deg, var(--accent), transparent)",
-                        }} />
-
-                        <div className="kpi-label" style={{ marginBottom: 16 }}>Membership</div>
-
-                        {profile?.membership_plan ? (
-                            <>
+                            background: "var(--surface)",
+                            border: "1px solid var(--danger-border)",
+                            borderRadius: 16, padding: 32,
+                            position: "relative", overflow: "hidden",
+                        }}>
+                            <div style={{
+                                position: "absolute", top: 0, left: 0, right: 0, height: 3,
+                                background: "var(--danger)",
+                            }} />
+                            <div style={{ fontSize: 32, marginBottom: 16 }}>⚠</div>
+                            <div style={{
+                                fontFamily: "Barlow Condensed, sans-serif",
+                                fontWeight: 900, fontSize: 28,
+                                color: "var(--danger)", marginBottom: 12,
+                            }}>
+                                Account deactivated
+                            </div>
+                            <p style={{ fontSize: 14, color: "var(--muted)", lineHeight: 1.6 }}>
+                                Your account has been deactivated. Please contact {gym?.name ?? "your gym"} to resolve this.
+                            </p>
+                        </div>
+                    ) : (
+                        <>
+                            {/* Membership card */}
+                            <div style={{
+                                background: "var(--surface)", border: "1px solid var(--border)",
+                                borderRadius: 16, padding: 32, marginBottom: 16,
+                                position: "relative", overflow: "hidden",
+                            }}>
                                 <div style={{
-                                    fontFamily: "Barlow Condensed, sans-serif",
-                                    fontWeight: 900, fontSize: 36,
-                                    color: "var(--text)", marginBottom: 4,
-                                }}>
-                                    {profile.membership_plan.name}
-                                </div>
-                                <div style={{ fontSize: 14, color: "var(--muted)", marginBottom: 24 }}>
-                                    €{profile.membership_plan.price} /{" "}
-                                    {profile.membership_plan.duration_months === 1
-                                        ? "month"
-                                        : `${profile.membership_plan.duration_months} months`}
-                                </div>
+                                    position: "absolute", top: 0, left: 0, right: 0, height: 3,
+                                    background: isExpired
+                                        ? "var(--danger)"
+                                        : "linear-gradient(90deg, var(--accent), transparent)",
+                                }} />
 
-                                {/* Expiry status */}
-                                {isExpired ? (
-                                    <div style={{
-                                        background: "var(--danger-subtle)",
-                                        border: "1px solid var(--danger-border)",
-                                        borderRadius: 10, padding: "14px 18px",
-                                        color: "var(--danger)", fontSize: 14,
-                                    }}>
-                                        ⚠ Your membership expired on {formatDate(profile.membership_expires_at)}.
-                                        Contact your gym to renew.
-                                    </div>
-                                ) : isExpiringSoon ? (
-                                    <div style={{
-                                        background: "rgba(255, 180, 0, 0.06)",
-                                        border: "1px solid rgba(255, 180, 0, 0.2)",
-                                        borderRadius: 10, padding: "14px 18px",
-                                        color: "#FFB400", fontSize: 14,
-                                    }}>
-                                        ⏳ Expires in {days} day{days !== 1 ? "s" : ""} — {formatDate(profile.membership_expires_at)}
-                                    </div>
+                                <div className="kpi-label" style={{ marginBottom: 16 }}>Membership</div>
+
+                                {profile?.membership_plan ? (
+                                    <>
+                                        <div style={{
+                                            fontFamily: "Barlow Condensed, sans-serif",
+                                            fontWeight: 900, fontSize: 36,
+                                            color: "var(--text)", marginBottom: 4,
+                                        }}>
+                                            {profile.membership_plan.name}
+                                        </div>
+                                        <div style={{ fontSize: 14, color: "var(--muted)", marginBottom: 24 }}>
+                                            €{profile.membership_plan.price} /{" "}
+                                            {profile.membership_plan.duration_months === 1
+                                                ? "month"
+                                                : `${profile.membership_plan.duration_months} months`}
+                                        </div>
+
+                                        {isExpired ? (
+                                            <div style={{
+                                                background: "var(--danger-subtle)",
+                                                border: "1px solid var(--danger-border)",
+                                                borderRadius: 10, padding: "14px 18px",
+                                                color: "var(--danger)", fontSize: 14,
+                                            }}>
+                                                ⚠ Your membership expired on {formatDate(profile.membership_expires_at)}.
+                                                Contact your gym to renew.
+                                            </div>
+                                        ) : isExpiringSoon ? (
+                                            <div style={{
+                                                background: "rgba(255, 180, 0, 0.06)",
+                                                border: "1px solid rgba(255, 180, 0, 0.2)",
+                                                borderRadius: 10, padding: "14px 18px",
+                                                color: "#FFB400", fontSize: 14,
+                                            }}>
+                                                ⏳ Expires in {days} day{days !== 1 ? "s" : ""} — {formatDate(profile.membership_expires_at)}
+                                            </div>
+                                        ) : (
+                                            <div style={{
+                                                background: "var(--accent-subtle)",
+                                                border: "1px solid var(--accent-border)",
+                                                borderRadius: 10, padding: "14px 18px",
+                                                color: "var(--accent)", fontSize: 14,
+                                            }}>
+                                                ✓ Active until {formatDate(profile.membership_expires_at)}
+                                            </div>
+                                        )}
+                                    </>
                                 ) : (
-                                    <div style={{
-                                        background: "var(--accent-subtle)",
-                                        border: "1px solid var(--accent-border)",
-                                        borderRadius: 10, padding: "14px 18px",
-                                        color: "var(--accent)", fontSize: 14,
-                                    }}>
-                                        ✓ Active until {formatDate(profile.membership_expires_at)}
+                                    <div style={{ color: "var(--muted)", fontSize: 14 }}>
+                                        No membership plan assigned yet. Contact your gym.
                                     </div>
                                 )}
-                            </>
-                        ) : (
-                            <div style={{ color: "var(--muted)", fontSize: 14 }}>
-                                No membership plan assigned yet. Contact your gym.
                             </div>
-                        )}
-                    </div>
 
-                    {/* Account status */}
-                    <div style={{
-                        background: "var(--surface)", border: "1px solid var(--border)",
-                        borderRadius: 16, padding: 24,
-                        display: "flex", justifyContent: "space-between", alignItems: "center",
-                    }}>
-                        <div>
-                            <div className="kpi-label" style={{ marginBottom: 4 }}>Account</div>
-                            <div style={{ fontSize: 14, color: "var(--text-dim)" }}>{user?.email}</div>
-                        </div>
-                        <span className={`badge ${profile?.active ? "active" : "inactive"}`}>
-                            {profile?.active ? "active" : "inactive"}
-                        </span>
-                    </div>
-
+                            {/* Account status */}
+                            <div style={{
+                                background: "var(--surface)", border: "1px solid var(--border)",
+                                borderRadius: 16, padding: 24,
+                                display: "flex", justifyContent: "space-between", alignItems: "center",
+                            }}>
+                                <div>
+                                    <div className="kpi-label" style={{ marginBottom: 4 }}>Account</div>
+                                    <div style={{ fontSize: 14, color: "var(--text-dim)" }}>{user?.email}</div>
+                                </div>
+                                <span className="badge active">active</span>
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
         </div>
