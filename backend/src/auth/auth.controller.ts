@@ -19,13 +19,18 @@ export class AuthController {
     }
 
     @Post('login')
-    login(@Body() dto: { email: string; password: string }) {
-        return this.authService.signIn(dto.email, dto.password);
+    login(@Body() dto: { email: string; password: string; gymId?: string }) {
+        return this.authService.signIn(dto.email, dto.password, dto.gymId);
     }
 
     @Get('me')
     @UseGuards(JwtGuard)
     me(@Req() req: { token: string }) {
         return this.authService.getCurrentUser(req.token);
+    }
+
+    @Post('reset-password')
+    resetPassword(@Body() dto: { email: string }) {
+        return this.authService.resetPassword(dto.email);
     }
 }

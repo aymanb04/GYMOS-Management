@@ -59,7 +59,7 @@ export class AuthService {
         return { message: 'Account created successfully', userId: authUser.id };
     }
 
-    async signIn(email: string, password: string) {
+    async signIn(email: string, password: string, gymId?: string) {
         const anonClient = this.supabase.getAnonClient();
 
         const { data, error } = await anonClient.auth.signInWithPassword({
@@ -71,7 +71,6 @@ export class AuthService {
             throw new UnauthorizedException('Invalid credentials');
         }
 
-        // Use service client here — bypasses RLS entirely
         const { data: profile, error: profileError } = await this.supabase.getServiceClient()
             .from('users')
             .select('id, email, name, phone, gym_id, role, active, membership_plan_id')
@@ -80,6 +79,16 @@ export class AuthService {
 
         if (profileError || !profile) {
             throw new UnauthorizedException('User profile not found');
+        }
+
+        // Verify user belongs to the gym of this subdomain
+        if (gymId && profile.gym_id !== gymId) {
+            throw new UnauthorizedException('Account not found for this gym.');
+        }
+
+        // Block inactive members
+        if (!profile.active) {
+            throw new UnauthorizedException('Your account has been deactivated. Contact your gym.');
         }
 
         return {
@@ -98,7 +107,6 @@ export class AuthService {
             throw new UnauthorizedException('Invalid token');
         }
 
-        // Service client bypasses RLS for internal profile lookup
         const { data: profile, error: profileError } = await this.supabase.getServiceClient()
             .from('users')
             .select('id, email, name, phone, gym_id, role, active, membership_plan_id')
@@ -110,5 +118,18 @@ export class AuthService {
         }
 
         return profile;
+    }
+
+    // Add this method to AuthService
+    async resetPassword(email: string) {
+        const serviceClient = this.supabase.getServiceClient();
+
+        const { error } = await serviceClient.auth.resetPasswordForEmail(email, {
+            redirectTo: `${process.env.FRONTEND_URL}/reset-password`,
+        });
+
+        // Always return success even if email doesn't exist (security best practice)
+        if (error) console.error('Reset password error:', error.message);
+        return { message: 'If an account exists, a reset link has been sent.' };
     }
 }

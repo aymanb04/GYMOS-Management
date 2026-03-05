@@ -23,8 +23,9 @@ export interface User {
 interface AuthContextType {
     user: User | null;
     loading: boolean;
-    login: (email: string, password: string) => Promise<void>;
+    login: (email: string, password: string, gymId?: string) => Promise<void>;
     logout: () => void;
+    resetPassword: (email: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -34,18 +35,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [loading, setLoading] = useState(true);
     const router = useRouter();
 
-    const login = async (email: string, password: string) => {
-        const res = await api.post('/auth/login', { email, password });
+    const login = async (email: string, password: string, gymId?: string) => {
+        const res = await api.post('/auth/login', { email, password, gymId });
         const { accessToken, user: profile } = res.data;
 
-        // Persist token (localStorage + cookie for middleware)
         setAuthTokens(accessToken);
-        // Cache user profile so page refreshes don't need /auth/me
         localStorage.setItem('gymos_user', JSON.stringify(profile));
-
         setUser(profile);
 
-        // Role-based redirect
         if (profile.role === 'admin' || profile.role === 'coach') {
             router.push('/dashboard');
         } else {
@@ -60,7 +57,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         router.push('/login');
     };
 
-    // Restore session on page load
+    const resetPassword = async (email: string) => {
+        await api.post('/auth/reset-password', { email });
+    };
+
     useEffect(() => {
         const token = localStorage.getItem('accessToken');
 
@@ -69,20 +69,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             return;
         }
 
-        // Try to restore from cache first (instant, no network)
         const cached = localStorage.getItem('gymos_user');
         if (cached) {
             try {
                 setUser(JSON.parse(cached));
             } catch {
-                // Corrupt cache — clear it, continue to /auth/me call
                 localStorage.removeItem('gymos_user');
             }
         }
 
-        // Always verify token is still valid in the background
-        // If /auth/me exists on backend: refreshes user data silently
-        // If not yet deployed: cached user stays, no logout
         api
             .get('/auth/me')
             .then((res) => {
@@ -90,8 +85,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 localStorage.setItem('gymos_user', JSON.stringify(res.data));
             })
             .catch((err) => {
-                // Only log out if token is explicitly rejected (401)
-                // 404 means /auth/me not deployed yet — keep cached user
                 if (err?.response?.status === 401) {
                     clearAuthTokens();
                     localStorage.removeItem('gymos_user');
@@ -102,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, []);
 
     return (
-        <AuthContext.Provider value={{ user, loading, login, logout }}>
+        <AuthContext.Provider value={{ user, loading, login, logout, resetPassword }}>
             {children}
         </AuthContext.Provider>
     );
