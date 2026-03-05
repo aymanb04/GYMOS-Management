@@ -17,7 +17,6 @@ export class MembersService {
         const { data: authData } = await client.auth.getUser();
         if (!authData.user) throw new ForbiddenException('Invalid token');
 
-        // Use service client to bypass RLS for internal role/gym lookup
         const { data: profile } = await this.supabase.getServiceClient()
             .from('users')
             .select('gym_id, role')
@@ -32,8 +31,6 @@ export class MembersService {
         return profile.gym_id;
     }
 
-    // GET /api/members/me — member views their own profile
-    // NOTE: must be registered BEFORE findAll to avoid route conflicts
     async getMyProfile(jwt: string) {
         const client = this.supabase.getUserClient(jwt);
         const { data: authData } = await client.auth.getUser();
@@ -55,7 +52,27 @@ export class MembersService {
         return data;
     }
 
-    // GET /api/members — all members for the admin's gym
+    async updateMe(dto: { name?: string; password?: string }, jwt: string) {
+        const client = this.supabase.getUserClient(jwt);
+        const { data: authData } = await client.auth.getUser();
+        if (!authData.user) throw new UnauthorizedException('Invalid token');
+
+        if (dto.name) {
+            await this.supabase.getServiceClient()
+                .from('users')
+                .update({ name: dto.name })
+                .eq('id', authData.user.id);
+        }
+
+        if (dto.password) {
+            const { error } = await this.supabase.getServiceClient()
+                .auth.admin.updateUserById(authData.user.id, { password: dto.password });
+            if (error) throw new Error(error.message);
+        }
+
+        return this.getMyProfile(jwt);
+    }
+
     async findAll(jwt: string) {
         const gymId = await this.getAdminGymId(jwt);
         const client = this.supabase.getServiceClient();
@@ -76,7 +93,6 @@ export class MembersService {
         return data;
     }
 
-    // GET /api/members/plans — plans for this gym
     async getPlans(jwt: string) {
         const gymId = await this.getAdminGymId(jwt);
         const client = this.supabase.getServiceClient();
@@ -91,7 +107,6 @@ export class MembersService {
         return data ?? [];
     }
 
-    // POST /api/members — manually add a member
     async create(dto: CreateMemberDto, jwt: string) {
         const gymId = await this.getAdminGymId(jwt);
         const serviceClient = this.supabase.getServiceClient();
@@ -143,7 +158,7 @@ export class MembersService {
             await serviceClient.auth.admin.deleteUser(authData.user.id);
             throw new BadRequestException(dbError.message);
         }
-        // Fetch again with joined plan so frontend can display it immediately
+
         const { data: fullMember } = await serviceClient
             .from('users')
             .select(`
@@ -159,7 +174,6 @@ export class MembersService {
         return fullMember;
     }
 
-    // PATCH /api/members/:id/status
     async toggleStatus(memberId: string, jwt: string) {
         const gymId = await this.getAdminGymId(jwt);
         const client = this.supabase.getServiceClient();
@@ -185,7 +199,6 @@ export class MembersService {
         return data;
     }
 
-    // PATCH /api/members/:id/plan
     async assignPlan(memberId: string, planId: string | null, jwt: string) {
         const gymId = await this.getAdminGymId(jwt);
         const client = this.supabase.getServiceClient();

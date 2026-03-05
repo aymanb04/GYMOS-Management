@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { SupabaseService } from '../supabase.service';
 
 @Injectable()
@@ -16,7 +16,6 @@ export class GymsService {
         return data;
     }
 
-    // Public — resolves subdomain to gym config for white-labeling
     async resolveBySubdomain(subdomain: string) {
         const client = this.supabase.getServiceClient();
         const { data, error } = await client
@@ -29,6 +28,34 @@ export class GymsService {
             throw new NotFoundException(`No gym found for subdomain: ${subdomain}`);
         }
 
+        return data;
+    }
+
+    async updateGym(gymId: string, dto: { name?: string; brand_color?: string }, jwt: string) {
+        const client = this.supabase.getUserClient(jwt);
+        const { data: authData } = await client.auth.getUser();
+        if (!authData.user) throw new ForbiddenException('Invalid token');
+
+        const { data: profile } = await this.supabase.getServiceClient()
+            .from('users')
+            .select('gym_id, role')
+            .eq('id', authData.user.id)
+            .single();
+
+        if (!profile || profile.role !== 'admin') throw new ForbiddenException('Admins only');
+        if (profile.gym_id !== gymId) throw new ForbiddenException('Not your gym');
+
+        const { data, error } = await this.supabase.getServiceClient()
+            .from('gyms')
+            .update({
+                ...(dto.name ? { name: dto.name } : {}),
+                ...(dto.brand_color ? { brand_color: dto.brand_color } : {}),
+            })
+            .eq('id', gymId)
+            .select()
+            .single();
+
+        if (error) throw new Error(error.message);
         return data;
     }
 
@@ -61,8 +88,7 @@ export class GymsService {
             .gte('created_at', startOfMonth.toISOString());
 
         const monthlyRevenue = (payments ?? []).reduce(
-            (sum, p) => sum + Number(p.amount),
-            0,
+            (sum, p) => sum + Number(p.amount), 0,
         );
 
         const today = new Date();

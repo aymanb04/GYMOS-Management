@@ -18,11 +18,18 @@ export class MembersController {
     constructor(private readonly membersService: MembersService) {}
 
     // ⚠ Static routes MUST come before parameterized routes (:id)
-    // otherwise NestJS matches 'me' and 'plans' as :id values
 
     @Get('me')
     getMyProfile(@Req() req: { token: string }) {
         return this.membersService.getMyProfile(req.token);
+    }
+
+    @Patch('me')
+    updateMe(
+        @Body() dto: { name?: string; password?: string },
+        @Req() req: { token: string },
+    ) {
+        return this.membersService.updateMe(dto, req.token);
     }
 
     @Get('plans')
