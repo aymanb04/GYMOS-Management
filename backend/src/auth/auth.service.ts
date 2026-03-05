@@ -125,7 +125,7 @@ export class AuthService {
         const serviceClient = this.supabase.getServiceClient();
 
         const { error } = await serviceClient.auth.resetPasswordForEmail(email, {
-            redirectTo: `${process.env.FRONTEND_URL}/reset-password`,
+            redirectTo: `https://gymos.io/reset-password`,
         });
 
         // Always return success even if email doesn't exist (security best practice)
