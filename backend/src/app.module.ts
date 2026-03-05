@@ -20,6 +20,6 @@ import { SupabaseModule } from './supabase.module';
         ClassesModule,
     ],
     controllers: [AppController],
-    providers: [AppService],
+    providers: [],
 })
 export class AppModule {}
