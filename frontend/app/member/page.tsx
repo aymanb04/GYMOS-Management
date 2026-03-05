@@ -70,7 +70,7 @@ export default function MemberPage() {
         ])
             .then(([profileRes, classesRes]) => {
                 setProfile(profileRes.data);
-                setClasses(classesRes.data);
+                setClasses(Array.isArray(classesRes.data) ? classesRes.data : []);
             })
             .catch(console.error)
             .finally(() => setLoading(false));
