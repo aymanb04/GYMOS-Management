@@ -6,24 +6,25 @@ import { useGym } from "@/context/GymContext";
 import { api } from "@/lib/api";
 
 export default function SettingsPage() {
-    const { user } = useAuth();
+    const { user, logout } = useAuth();
     const { gym } = useGym();
 
     // Gym settings
-    const [gymName, setGymName]         = useState("");
-    const [brandColor, setBrandColor]   = useState("#CBFF00");
-    const [gymSaving, setGymSaving]     = useState(false);
-    const [gymSuccess, setGymSuccess]   = useState(false);
-    const [gymError, setGymError]       = useState("");
+    const [gymName, setGymName]       = useState("");
+    const [brandColor, setBrandColor] = useState("#CBFF00");
+    const [gymSaving, setGymSaving]   = useState(false);
+    const [gymSuccess, setGymSuccess] = useState(false);
+    const [gymError, setGymError]     = useState("");
 
     // Account settings
-    const [name, setName]               = useState("");
-    const [email, setEmail]             = useState("");
-    const [newPassword, setNewPassword] = useState("");
-    const [confirmPassword, setConfirmPassword] = useState("");
-    const [accountSaving, setAccountSaving]     = useState(false);
-    const [accountSuccess, setAccountSuccess]   = useState(false);
-    const [accountError, setAccountError]       = useState("");
+    const [name, setName]                         = useState("");
+    const [email, setEmail]                       = useState("");
+    const [newPassword, setNewPassword]           = useState("");
+    const [confirmPassword, setConfirmPassword]   = useState("");
+    const [accountSaving, setAccountSaving]       = useState(false);
+    const [accountSuccess, setAccountSuccess]     = useState(false);
+    const [accountError, setAccountError]         = useState("");
+    const [passwordChanged, setPasswordChanged]   = useState(false);
 
     useEffect(() => {
         if (gym) {
@@ -72,15 +73,23 @@ export default function SettingsPage() {
         setAccountError("");
         setAccountSaving(true);
         setAccountSuccess(false);
+
         try {
             await api.patch(`/members/me`, {
                 name: name.trim(),
                 ...(newPassword ? { password: newPassword } : {}),
             });
-            setNewPassword("");
-            setConfirmPassword("");
-            setAccountSuccess(true);
-            setTimeout(() => setAccountSuccess(false), 3000);
+
+            if (newPassword) {
+                // Password change invalidates the JWT — must re-login
+                setPasswordChanged(true);
+                setTimeout(() => logout(), 2500);
+            } else {
+                setNewPassword("");
+                setConfirmPassword("");
+                setAccountSuccess(true);
+                setTimeout(() => setAccountSuccess(false), 3000);
+            }
         } catch {
             setAccountError("Could not save account settings.");
         } finally {
@@ -89,6 +98,29 @@ export default function SettingsPage() {
     };
 
     const isAdmin = user?.role === "admin";
+
+    if (passwordChanged) {
+        return (
+            <div style={{
+                display: "flex", flexDirection: "column",
+                alignItems: "center", justifyContent: "center",
+                minHeight: "60vh", textAlign: "center",
+            }}>
+                <div style={{ fontSize: 48, marginBottom: 16 }}>🔐</div>
+                <h2 style={{
+                    fontFamily: "Barlow Condensed, sans-serif",
+                    fontWeight: 700, fontSize: 28,
+                    color: "var(--text)", marginBottom: 8,
+                }}>Password updated</h2>
+                <p style={{ fontSize: 14, color: "var(--muted)", marginBottom: 4 }}>
+                    Signing you out for security...
+                </p>
+                <p style={{ fontSize: 13, color: "var(--muted2)" }}>
+                    Please sign in again with your new password.
+                </p>
+            </div>
+        );
+    }
 
     return (
         <>
@@ -116,9 +148,8 @@ export default function SettingsPage() {
 
                         <div style={{
                             fontFamily: "Barlow Condensed, sans-serif",
-                            fontWeight: 700, fontSize: 20,
-                            color: "var(--text)", marginBottom: 4,
-                            textTransform: "uppercase",
+                            fontWeight: 700, fontSize: 20, color: "var(--text)",
+                            marginBottom: 4, textTransform: "uppercase",
                         }}>
                             Gym settings
                         </div>
@@ -139,47 +170,32 @@ export default function SettingsPage() {
 
                         <div className="field">
                             <label>Gym name</label>
-                            <input
-                                value={gymName}
-                                onChange={(e) => setGymName(e.target.value)}
-                                placeholder="e.g. Iron Forge Gym"
-                            />
+                            <input value={gymName} onChange={(e) => setGymName(e.target.value)}
+                                   placeholder="e.g. Iron Forge Gym" />
                         </div>
 
                         <div className="field">
                             <label>Brand color</label>
                             <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                                <input
-                                    type="color"
-                                    value={brandColor}
-                                    onChange={(e) => setBrandColor(e.target.value)}
-                                    style={{
-                                        width: 48, height: 48, borderRadius: 10,
-                                        border: "1px solid var(--border)",
-                                        background: "none", cursor: "pointer", padding: 2,
-                                    }}
+                                <input type="color" value={brandColor}
+                                       onChange={(e) => setBrandColor(e.target.value)}
+                                       style={{
+                                           width: 48, height: 48, borderRadius: 10,
+                                           border: "1px solid var(--border)",
+                                           background: "none", cursor: "pointer", padding: 2,
+                                       }}
                                 />
-                                <input
-                                    value={brandColor}
-                                    onChange={(e) => setBrandColor(e.target.value)}
-                                    placeholder="#CBFF00"
-                                    style={{ flex: 1 }}
-                                />
+                                <input value={brandColor} onChange={(e) => setBrandColor(e.target.value)}
+                                       placeholder="#CBFF00" style={{ flex: 1 }} />
                                 <div style={{
                                     width: 48, height: 48, borderRadius: 10,
-                                    background: brandColor,
-                                    border: "1px solid var(--border)",
-                                    flexShrink: 0,
+                                    background: brandColor, border: "1px solid var(--border)", flexShrink: 0,
                                 }} />
                             </div>
                         </div>
 
-                        <button
-                            className="btn-p"
-                            onClick={handleGymSave}
-                            disabled={gymSaving}
-                            style={{ width: "auto", padding: "12px 24px", fontSize: 14 }}
-                        >
+                        <button className="btn-p" onClick={handleGymSave} disabled={gymSaving}
+                                style={{ width: "auto", padding: "12px 24px", fontSize: 14 }}>
                             {gymSaving ? "Saving..." : "Save gym settings →"}
                         </button>
                     </div>
@@ -192,9 +208,8 @@ export default function SettingsPage() {
                 }}>
                     <div style={{
                         fontFamily: "Barlow Condensed, sans-serif",
-                        fontWeight: 700, fontSize: 20,
-                        color: "var(--text)", marginBottom: 4,
-                        textTransform: "uppercase",
+                        fontWeight: 700, fontSize: 20, color: "var(--text)",
+                        marginBottom: 4, textTransform: "uppercase",
                     }}>
                         Account settings
                     </div>
@@ -215,29 +230,18 @@ export default function SettingsPage() {
 
                     <div className="field">
                         <label>Full name</label>
-                        <input
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            placeholder="Your name"
-                        />
+                        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
                     </div>
 
                     <div className="field">
                         <label>Email</label>
-                        <input
-                            value={email}
-                            disabled
-                            style={{ opacity: 0.5, cursor: "not-allowed" }}
-                        />
+                        <input value={email} disabled style={{ opacity: 0.5, cursor: "not-allowed" }} />
                         <div style={{ fontSize: 11, color: "var(--muted2)", marginTop: 4 }}>
                             Email cannot be changed here. Contact support.
                         </div>
                     </div>
 
-                    <div style={{
-                        borderTop: "1px solid var(--border)",
-                        marginTop: 8, paddingTop: 20, marginBottom: 8,
-                    }}>
+                    <div style={{ borderTop: "1px solid var(--border)", marginTop: 8, paddingTop: 20, marginBottom: 8 }}>
                         <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 16 }}>
                             Change password — leave blank to keep current password
                         </div>
@@ -245,32 +249,30 @@ export default function SettingsPage() {
 
                     <div className="field">
                         <label>New password</label>
-                        <input
-                            type="password"
-                            value={newPassword}
-                            onChange={(e) => setNewPassword(e.target.value)}
-                            placeholder="Min. 6 characters"
-                            autoComplete="new-password"
-                        />
+                        <input type="password" value={newPassword}
+                               onChange={(e) => setNewPassword(e.target.value)}
+                               placeholder="Min. 6 characters" autoComplete="new-password" />
                     </div>
 
                     <div className="field">
                         <label>Confirm password</label>
-                        <input
-                            type="password"
-                            value={confirmPassword}
-                            onChange={(e) => setConfirmPassword(e.target.value)}
-                            placeholder="Repeat new password"
-                            autoComplete="new-password"
-                        />
+                        <input type="password" value={confirmPassword}
+                               onChange={(e) => setConfirmPassword(e.target.value)}
+                               placeholder="Repeat new password" autoComplete="new-password" />
                     </div>
 
-                    <button
-                        className="btn-p"
-                        onClick={handleAccountSave}
-                        disabled={accountSaving}
-                        style={{ width: "auto", padding: "12px 24px", fontSize: 14 }}
-                    >
+                    {newPassword && (
+                        <div style={{
+                            background: "rgba(255,180,0,0.06)", border: "1px solid rgba(255,180,0,0.2)",
+                            borderRadius: 8, padding: "10px 14px",
+                            color: "#FFB400", fontSize: 12, marginBottom: 16,
+                        }}>
+                            ⚠ Changing your password will sign you out.
+                        </div>
+                    )}
+
+                    <button className="btn-p" onClick={handleAccountSave} disabled={accountSaving}
+                            style={{ width: "auto", padding: "12px 24px", fontSize: 14 }}>
                         {accountSaving ? "Saving..." : "Save account settings →"}
                     </button>
                 </div>
@@ -282,9 +284,8 @@ export default function SettingsPage() {
                 }}>
                     <div style={{
                         fontFamily: "Barlow Condensed, sans-serif",
-                        fontWeight: 700, fontSize: 20,
-                        color: "var(--danger)", marginBottom: 4,
-                        textTransform: "uppercase",
+                        fontWeight: 700, fontSize: 20, color: "var(--danger)",
+                        marginBottom: 4, textTransform: "uppercase",
                     }}>
                         Danger zone
                     </div>
@@ -293,11 +294,9 @@ export default function SettingsPage() {
                     </p>
                     <button style={{
                         padding: "10px 20px", borderRadius: 8,
-                        background: "var(--danger-subtle)",
-                        border: "1px solid var(--danger-border)",
+                        background: "var(--danger-subtle)", border: "1px solid var(--danger-border)",
                         color: "var(--danger)", fontSize: 13,
-                        cursor: "not-allowed", fontFamily: "DM Sans, sans-serif",
-                        opacity: 0.6,
+                        cursor: "not-allowed", fontFamily: "DM Sans, sans-serif", opacity: 0.6,
                     }} disabled>
                         Delete gym account — contact support
                     </button>

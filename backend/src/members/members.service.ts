@@ -70,7 +70,8 @@ export class MembersService {
             if (error) throw new Error(error.message);
         }
 
-        return this.getMyProfile(jwt);
+        // Don't call getMyProfile here — password change invalidates the JWT
+        return { message: 'Settings updated successfully', passwordChanged: !!dto.password };
     }
 
     async findAll(jwt: string) {
