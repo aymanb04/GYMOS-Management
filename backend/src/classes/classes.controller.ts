@@ -11,11 +11,6 @@ import { JwtGuard } from '../auth/guards/jwt.guard';
 export class ClassesController {
     constructor(private readonly classesService: ClassesService) {}
 
-    @Get('all')
-    findAllAdmin(@Req() req: { token: string }) {
-        return this.classesService.findAllAdmin(req.token);
-    }
-
     @Get()
     findAll(@Req() req: { token: string }) {
         return this.classesService.findAll(req.token);

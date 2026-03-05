@@ -25,37 +25,22 @@ export class ClassesService {
         return { gymId: profile.gym_id, role: profile.role };
     }
 
-    // GET /api/classes — all upcoming classes for the user's gym
+    // GET /api/classes — weekly schedule for any authenticated user
     async findAll(jwt: string) {
         const { gymId } = await this.getGymAndRole(jwt);
 
         const { data, error } = await this.supabase.getServiceClient()
             .from('lessons')
-            .select('id, title, schedule, capacity, description, duration_minutes, instructor, created_at')
+            .select('id, title, day_of_week, time_of_day, capacity, description, duration_minutes, instructor')
             .eq('gym_id', gymId)
-            .gte('schedule', new Date().toISOString())
-            .order('schedule', { ascending: true });
+            .order('day_of_week', { ascending: true })
+            .order('time_of_day', { ascending: true });
 
         if (error) throw new Error(error.message);
         return data ?? [];
     }
 
-    // GET /api/classes/all — all classes including past (admin only)
-    async findAllAdmin(jwt: string) {
-        const { gymId, role } = await this.getGymAndRole(jwt);
-        if (role !== 'admin' && role !== 'coach') throw new ForbiddenException('Admins only');
-
-        const { data, error } = await this.supabase.getServiceClient()
-            .from('lessons')
-            .select('id, title, schedule, capacity, description, duration_minutes, instructor, created_at')
-            .eq('gym_id', gymId)
-            .order('schedule', { ascending: true });
-
-        if (error) throw new Error(error.message);
-        return data ?? [];
-    }
-
-    // POST /api/classes — create a class (admin/coach only)
+    // POST /api/classes
     async create(dto: CreateClassDto, jwt: string) {
         const { gymId, role } = await this.getGymAndRole(jwt);
         if (role !== 'admin' && role !== 'coach') throw new ForbiddenException('Admins only');
@@ -65,8 +50,9 @@ export class ClassesService {
             .insert({
                 gym_id: gymId,
                 title: dto.title,
+                day_of_week: dto.day_of_week,
+                time_of_day: dto.time_of_day,
                 capacity: dto.capacity,
-                schedule: dto.schedule,
                 description: dto.description ?? null,
                 duration_minutes: dto.duration_minutes ?? null,
                 instructor: dto.instructor ?? null,
@@ -78,7 +64,7 @@ export class ClassesService {
         return data;
     }
 
-    // PATCH /api/classes/:id — update a class (admin/coach only)
+    // PATCH /api/classes/:id
     async update(classId: string, dto: Partial<CreateClassDto>, jwt: string) {
         const { gymId, role } = await this.getGymAndRole(jwt);
         if (role !== 'admin' && role !== 'coach') throw new ForbiddenException('Admins only');
@@ -96,8 +82,9 @@ export class ClassesService {
             .from('lessons')
             .update({
                 title: dto.title,
+                day_of_week: dto.day_of_week,
+                time_of_day: dto.time_of_day,
                 capacity: dto.capacity,
-                schedule: dto.schedule,
                 description: dto.description ?? null,
                 duration_minutes: dto.duration_minutes ?? null,
                 instructor: dto.instructor ?? null,
@@ -111,7 +98,7 @@ export class ClassesService {
         return data;
     }
 
-    // DELETE /api/classes/:id — delete a class (admin/coach only)
+    // DELETE /api/classes/:id
     async remove(classId: string, jwt: string) {
         const { gymId, role } = await this.getGymAndRole(jwt);
         if (role !== 'admin' && role !== 'coach') throw new ForbiddenException('Admins only');
