@@ -1,10 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useGym } from "@/context/GymContext";
 
 export default function PaymentSuccessPage() {
+    return (
+        <Suspense fallback={<div className="spinner-wrap"><div className="spinner" /></div>}>
+            <PaymentSuccessContent />
+        </Suspense>
+    );
+}
+
+function PaymentSuccessContent() {
     const router = useRouter();
     const { gym } = useGym();
     const searchParams = useSearchParams();
