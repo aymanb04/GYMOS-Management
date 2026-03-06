@@ -7,6 +7,7 @@ import { GymsModule } from './gyms/gyms.module';
 import { MembersModule } from './members/members.module';
 import { PlansModule } from './plans/plans.module';
 import { ClassesModule } from './classes/classes.module';
+import { StripeModule } from './stripe/stripe.module';
 import { SupabaseModule } from './supabase.module';
 
 @Module({
@@ -18,8 +19,9 @@ import { SupabaseModule } from './supabase.module';
         MembersModule,
         PlansModule,
         ClassesModule,
+        StripeModule,
     ],
     controllers: [AppController],
-    providers: [],
+    providers: [AppService],
 })
 export class AppModule {}

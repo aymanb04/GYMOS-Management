@@ -1,38 +1,43 @@
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import { AppModule } from './app.module';
 
 async function bootstrap() {
-    const app = await NestFactory.create(AppModule);
-
-    app.enableCors({
-        origin: (origin, callback) => {
-            // Allow any subdomain of gymos.io and localhost for dev
-            if (
-                !origin ||
-                origin.endsWith('.gymos.io') ||
-                origin === 'https://gymos.io' ||
-                origin.includes('localhost')
-            ) {
-                callback(null, true);
-            } else {
-                callback(new Error('Not allowed by CORS'));
-            }
-        },
-        credentials: true,
+    const app = await NestFactory.create(AppModule, {
+        rawBody: true, // Required for Stripe webhook signature verification
     });
 
-    // All routes prefixed with /api — e.g. POST /api/auth/login
     app.setGlobalPrefix('api');
 
     app.useGlobalPipes(
         new ValidationPipe({
             whitelist: true,
-            forbidNonWhitelisted: true,
+            forbidNonWhitelisted: false,
+            transform: true,
         }),
     );
 
-    await app.listen(process.env.PORT ?? 3000);
-    console.log(`Backend running on port ${process.env.PORT ?? 3000}`);
+    app.enableCors({
+        origin: (origin, callback) => {
+            if (!origin) return callback(null, true);
+            if (
+                origin.endsWith('.gymos.io') ||
+                origin.endsWith('.gymos.be') ||
+                origin === 'https://gymos.io' ||
+                origin === 'https://www.gymos.io' ||
+                origin === process.env.FRONTEND_URL ||
+                origin.includes('localhost')
+            ) {
+                return callback(null, true);
+            }
+            callback(new Error('Not allowed by CORS'));
+        },
+        credentials: true,
+    });
+
+    const port = process.env.PORT ?? 3001;
+    await app.listen(port);
+    console.log(`Backend running on port ${port}`);
 }
+
 bootstrap();
