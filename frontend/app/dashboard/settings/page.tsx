@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useGym } from "@/context/GymContext";
 import { useSearchParams } from "next/navigation";
@@ -14,18 +14,24 @@ interface ConnectStatus {
 }
 
 export default function SettingsPage() {
+    return (
+        <Suspense fallback={<div className="spinner-wrap"><div className="spinner" /></div>}>
+            <SettingsContent />
+        </Suspense>
+    );
+}
+
+function SettingsContent() {
     const { user, logout } = useAuth();
     const { gym } = useGym();
     const searchParams = useSearchParams();
 
-    // Gym settings
     const [gymName, setGymName]       = useState("");
     const [brandColor, setBrandColor] = useState("#CBFF00");
     const [gymSaving, setGymSaving]   = useState(false);
     const [gymSuccess, setGymSuccess] = useState(false);
     const [gymError, setGymError]     = useState("");
 
-    // Account settings
     const [name, setName]                       = useState("");
     const [email, setEmail]                     = useState("");
     const [newPassword, setNewPassword]         = useState("");
@@ -35,7 +41,6 @@ export default function SettingsPage() {
     const [accountError, setAccountError]       = useState("");
     const [passwordChanged, setPasswordChanged] = useState(false);
 
-    // Stripe Connect
     const [connectStatus, setConnectStatus]     = useState<ConnectStatus | null>(null);
     const [connectLoading, setConnectLoading]   = useState(false);
     const [connectChecking, setConnectChecking] = useState(true);
@@ -53,7 +58,6 @@ export default function SettingsPage() {
             .finally(() => setConnectChecking(false));
     }, [user]);
 
-    // Handle return from Stripe onboarding
     useEffect(() => {
         const stripe = searchParams.get('stripe');
         if (stripe === 'success') {
@@ -130,16 +134,13 @@ export default function SettingsPage() {
 
             <div style={{ display: "flex", flexDirection: "column", gap: 24, maxWidth: 560 }}>
 
-                {/* ── GYM SETTINGS ── */}
                 {isAdmin && (
                     <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, padding: 32, position: "relative", overflow: "hidden" }}>
                         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "linear-gradient(90deg, var(--accent), transparent)" }} />
                         <div style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 700, fontSize: 20, color: "var(--text)", marginBottom: 4, textTransform: "uppercase" }}>Gym settings</div>
                         <p style={{ fontSize: 13, color: "var(--muted2)", marginBottom: 24 }}>Customize how your gym appears to members.</p>
-
                         {gymError && <div className="error-msg">{gymError}</div>}
                         {gymSuccess && <div style={{ background: "var(--accent-subtle)", border: "1px solid var(--accent-border)", borderRadius: 8, padding: "10px 14px", color: "var(--accent)", fontSize: 13, marginBottom: 16 }}>✓ Gym settings saved.</div>}
-
                         <div className="field">
                             <label>Gym name</label>
                             <input value={gymName} onChange={(e) => setGymName(e.target.value)} placeholder="e.g. Iron Forge Gym" />
@@ -159,16 +160,10 @@ export default function SettingsPage() {
                     </div>
                 )}
 
-                {/* ── STRIPE CONNECT ── */}
                 {isAdmin && (
                     <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, padding: 32 }}>
-                        <div style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 700, fontSize: 20, color: "var(--text)", marginBottom: 4, textTransform: "uppercase" }}>
-                            Payments
-                        </div>
-                        <p style={{ fontSize: 13, color: "var(--muted2)", marginBottom: 24 }}>
-                            Connect your Stripe account to accept membership payments from members.
-                        </p>
-
+                        <div style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 700, fontSize: 20, color: "var(--text)", marginBottom: 4, textTransform: "uppercase" }}>Payments</div>
+                        <p style={{ fontSize: 13, color: "var(--muted2)", marginBottom: 24 }}>Connect your Stripe account to accept membership payments from members.</p>
                         {connectChecking ? (
                             <div style={{ fontSize: 13, color: "var(--muted2)" }}>Checking status...</div>
                         ) : connectStatus?.connected ? (
@@ -176,9 +171,7 @@ export default function SettingsPage() {
                                 <div style={{ background: "var(--accent-subtle)", border: "1px solid var(--accent-border)", borderRadius: 10, padding: "14px 18px", color: "var(--accent)", fontSize: 14, marginBottom: 16 }}>
                                     ✓ Stripe account connected — payments are enabled
                                 </div>
-                                <div style={{ fontSize: 12, color: "var(--muted2)" }}>
-                                    Account ID: {connectStatus.accountId}
-                                </div>
+                                <div style={{ fontSize: 12, color: "var(--muted2)" }}>Account ID: {connectStatus.accountId}</div>
                             </div>
                         ) : (
                             <div>
@@ -187,8 +180,7 @@ export default function SettingsPage() {
                                         ⚠ Stripe account not fully set up. Complete onboarding to accept payments.
                                     </div>
                                 )}
-                                <button className="btn-p" onClick={handleConnectStripe} disabled={connectLoading}
-                                        style={{ width: "auto", padding: "12px 24px", fontSize: 14 }}>
+                                <button className="btn-p" onClick={handleConnectStripe} disabled={connectLoading} style={{ width: "auto", padding: "12px 24px", fontSize: 14 }}>
                                     {connectLoading ? "Redirecting..." : connectStatus?.accountId ? "Complete Stripe setup →" : "Connect Stripe account →"}
                                 </button>
                             </div>
@@ -196,14 +188,11 @@ export default function SettingsPage() {
                     </div>
                 )}
 
-                {/* ── ACCOUNT SETTINGS ── */}
                 <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, padding: 32 }}>
                     <div style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 700, fontSize: 20, color: "var(--text)", marginBottom: 4, textTransform: "uppercase" }}>Account settings</div>
                     <p style={{ fontSize: 13, color: "var(--muted2)", marginBottom: 24 }}>Update your personal information and password.</p>
-
                     {accountError && <div className="error-msg">{accountError}</div>}
                     {accountSuccess && <div style={{ background: "var(--accent-subtle)", border: "1px solid var(--accent-border)", borderRadius: 8, padding: "10px 14px", color: "var(--accent)", fontSize: 13, marginBottom: 16 }}>✓ Account settings saved.</div>}
-
                     <div className="field">
                         <label>Full name</label>
                         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
@@ -213,11 +202,9 @@ export default function SettingsPage() {
                         <input value={email} disabled style={{ opacity: 0.5, cursor: "not-allowed" }} />
                         <div style={{ fontSize: 11, color: "var(--muted2)", marginTop: 4 }}>Email cannot be changed here. Contact support.</div>
                     </div>
-
                     <div style={{ borderTop: "1px solid var(--border)", marginTop: 8, paddingTop: 20, marginBottom: 8 }}>
                         <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 16 }}>Change password — leave blank to keep current password</div>
                     </div>
-
                     <div className="field">
                         <label>New password</label>
                         <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Min. 6 characters" autoComplete="new-password" />
@@ -226,19 +213,16 @@ export default function SettingsPage() {
                         <label>Confirm password</label>
                         <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Repeat new password" autoComplete="new-password" />
                     </div>
-
                     {newPassword && (
                         <div style={{ background: "rgba(255,180,0,0.06)", border: "1px solid rgba(255,180,0,0.2)", borderRadius: 8, padding: "10px 14px", color: "#FFB400", fontSize: 12, marginBottom: 16 }}>
                             ⚠ Changing your password will sign you out.
                         </div>
                     )}
-
                     <button className="btn-p" onClick={handleAccountSave} disabled={accountSaving} style={{ width: "auto", padding: "12px 24px", fontSize: 14 }}>
                         {accountSaving ? "Saving..." : "Save account settings →"}
                     </button>
                 </div>
 
-                {/* ── DANGER ZONE ── */}
                 <div style={{ background: "var(--surface)", border: "1px solid var(--danger-border)", borderRadius: 16, padding: 32 }}>
                     <div style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 700, fontSize: 20, color: "var(--danger)", marginBottom: 4, textTransform: "uppercase" }}>Danger zone</div>
                     <p style={{ fontSize: 13, color: "var(--muted2)", marginBottom: 20 }}>Irreversible actions. Be careful.</p>
