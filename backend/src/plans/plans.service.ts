@@ -11,6 +11,23 @@ import { CreatePlanDto } from './dto/create-plan.dto';
 export class PlansService {
     constructor(private readonly supabase: SupabaseService) {}
 
+    // Any authenticated user — returns gym_id and role
+    private async getGymId(jwt: string): Promise<string> {
+        const client = this.supabase.getUserClient(jwt);
+        const { data: authData } = await client.auth.getUser();
+        if (!authData.user) throw new ForbiddenException('Invalid token');
+
+        const { data: profile } = await this.supabase.getServiceClient()
+            .from('users')
+            .select('gym_id')
+            .eq('id', authData.user.id)
+            .single();
+
+        if (!profile) throw new ForbiddenException('User profile not found');
+        return profile.gym_id;
+    }
+
+    // Admin only
     private async getAdminGymId(jwt: string): Promise<string> {
         const client = this.supabase.getUserClient(jwt);
         const { data: authData } = await client.auth.getUser();
@@ -28,8 +45,9 @@ export class PlansService {
         return profile.gym_id;
     }
 
+    // Available to all roles — members need this to choose and pay for a plan
     async findAll(jwt: string) {
-        const gymId = await this.getAdminGymId(jwt);
+        const gymId = await this.getGymId(jwt);
         const { data, error } = await this.supabase.getServiceClient()
             .from('membership_plans')
             .select('id, name, price, duration_months, description, created_at')
@@ -61,7 +79,6 @@ export class PlansService {
     async update(planId: string, dto: Partial<CreatePlanDto>, jwt: string) {
         const gymId = await this.getAdminGymId(jwt);
 
-        // Verify plan belongs to this gym
         const { data: existing } = await this.supabase.getServiceClient()
             .from('membership_plans')
             .select('id')
@@ -91,7 +108,6 @@ export class PlansService {
     async remove(planId: string, jwt: string) {
         const gymId = await this.getAdminGymId(jwt);
 
-        // Check if any members are on this plan
         const { count } = await this.supabase.getServiceClient()
             .from('users')
             .select('id', { count: 'exact', head: true })
