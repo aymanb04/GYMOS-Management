@@ -28,17 +28,22 @@ export class PaymentsService {
         // All paid payments for this gym
         const { data: payments } = await service
             .from('payments')
-            .select(`
-        id, amount, created_at, status,
-        users(name, email),
-        membership_plans(name)
-    `)
+            .select('id, amount, created_at, status, user_id, membership_plan_id')
             .eq('gym_id', gymId)
             .eq('status', 'paid')
             .order('created_at', { ascending: false });
 
         const all = payments ?? [];
 
+// Fetch users and plans separately
+        const userIds = [...new Set(all.map(p => p.user_id).filter(Boolean))];
+        const planIds = [...new Set(all.map(p => p.membership_plan_id).filter(Boolean))];
+
+        const { data: users } = await service.from('users').select('id, name, email').in('id', userIds);
+        const { data: plans } = await service.from('membership_plans').select('id, name').in('id', planIds);
+
+        const userMap = Object.fromEntries((users ?? []).map(u => [u.id, u]));
+        const planMap2 = Object.fromEntries((plans ?? []).map(p => [p.id, p]));
         // KPI calculations
         const now = new Date();
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -76,7 +81,7 @@ export class PaymentsService {
         // Revenue by plan
         const planMap: Record<string, { name: string; revenue: number; count: number }> = {};
         for (const p of all) {
-            const planName = (p as any).membership_plans?.name ?? 'Unknown';
+            const planName = planMap2[(p as any).membership_plan_id]?.name ?? 'Unknown';
             if (!planMap[planName]) planMap[planName] = { name: planName, revenue: 0, count: 0 };
             planMap[planName].revenue += Number(p.amount);
             planMap[planName].count += 1;
@@ -97,9 +102,9 @@ export class PaymentsService {
                 id: p.id,
                 amount: p.amount,
                 created_at: p.created_at,
-                memberName: (p as any).users?.name ?? '—',
-                memberEmail: (p as any).users?.email ?? '—',
-                planName: (p as any).membership_plans?.name ?? '—',
+                memberName: userMap[p.user_id]?.name ?? '—',
+                memberEmail: userMap[p.user_id]?.email ?? '—',
+                planName: planMap2[p.membership_plan_id]?.name ?? '—',
             })),
         };
     }
