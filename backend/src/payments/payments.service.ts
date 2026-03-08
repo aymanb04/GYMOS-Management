@@ -30,8 +30,8 @@ export class PaymentsService {
             .from('payments')
             .select(`
         id, amount, created_at, status,
-        user:users(name, email),
-        plan:membership_plans(name)
+        users(name, email),
+        membership_plans(name)
     `)
             .eq('gym_id', gymId)
             .eq('status', 'paid')
@@ -76,7 +76,7 @@ export class PaymentsService {
         // Revenue by plan
         const planMap: Record<string, { name: string; revenue: number; count: number }> = {};
         for (const p of all) {
-            const planName = (p.plan as any)?.name ?? 'Unknown';
+            const planName = (p as any).membership_plans?.name ?? 'Unknown';
             if (!planMap[planName]) planMap[planName] = { name: planName, revenue: 0, count: 0 };
             planMap[planName].revenue += Number(p.amount);
             planMap[planName].count += 1;
@@ -97,9 +97,9 @@ export class PaymentsService {
                 id: p.id,
                 amount: p.amount,
                 created_at: p.created_at,
-                memberName: (p.user as any)?.name ?? '—',
-                memberEmail: (p.user as any)?.email ?? '—',
-                planName: (p.plan as any)?.name ?? '—',
+                memberName: (p as any).users?.name ?? '—',
+                memberEmail: (p as any).users?.email ?? '—',
+                planName: (p as any).membership_plans?.name ?? '—',
             })),
         };
     }
