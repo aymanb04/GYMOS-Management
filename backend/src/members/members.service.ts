@@ -70,7 +70,6 @@ export class MembersService {
             if (error) throw new Error(error.message);
         }
 
-        // Don't call getMyProfile here — password change invalidates the JWT
         return { message: 'Settings updated successfully', passwordChanged: !!dto.password };
     }
 
@@ -242,5 +241,67 @@ export class MembersService {
 
         if (error) throw new Error(error.message);
         return data;
+    }
+
+    // Record a cash payment and activate membership
+    async recordCashPayment(memberId: string, planId: string, jwt: string) {
+        const gymId = await this.getAdminGymId(jwt);
+        const client = this.supabase.getServiceClient();
+
+        // Verify member belongs to this gym
+        const { data: member } = await client
+            .from('users')
+            .select('id, gym_id')
+            .eq('id', memberId)
+            .eq('gym_id', gymId)
+            .single();
+
+        if (!member) throw new NotFoundException('Member not found');
+
+        // Get plan details
+        const { data: plan } = await client
+            .from('membership_plans')
+            .select('id, name, price, duration_months')
+            .eq('id', planId)
+            .eq('gym_id', gymId)
+            .single();
+
+        if (!plan) throw new NotFoundException('Plan not found');
+
+        // Set membership expiry
+        const expiry = new Date();
+        expiry.setMonth(expiry.getMonth() + plan.duration_months);
+
+        // Update member's membership
+        await client
+            .from('users')
+            .update({
+                membership_plan_id: planId,
+                membership_expires_at: expiry.toISOString(),
+                active: true,
+            })
+            .eq('id', memberId)
+            .eq('gym_id', gymId);
+
+        // Record cash payment
+        const { error: paymentError } = await client
+            .from('payments')
+            .insert({
+                gym_id: gymId,
+                user_id: memberId,
+                amount: plan.price,
+                status: 'paid',
+                source: 'cash',
+                membership_plan_id: planId,
+            });
+
+        if (paymentError) throw new Error(paymentError.message);
+
+        return {
+            message: 'Cash payment recorded and membership activated',
+            expires_at: expiry.toISOString(),
+            plan_name: plan.name,
+            amount: plan.price,
+        };
     }
 }

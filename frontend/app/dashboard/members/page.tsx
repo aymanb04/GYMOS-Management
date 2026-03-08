@@ -24,9 +24,7 @@ interface Member {
 function formatDate(iso: string | null) {
     if (!iso) return "—";
     return new Date(iso).toLocaleDateString("nl-BE", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
+        day: "numeric", month: "short", year: "numeric",
     });
 }
 
@@ -42,18 +40,24 @@ function isExpired(expiresAt: string | null) {
 }
 
 export default function MembersPage() {
-    const [members, setMembers]   = useState<Member[]>([]);
-    const [plans, setPlans]       = useState<Plan[]>([]);
-    const [loading, setLoading]   = useState(true);
-    const [search, setSearch]     = useState("");
-    const [showAdd, setShowAdd]   = useState(false);
-    const [filter, setFilter]     = useState<"all" | "active" | "inactive">("all");
+    const [members, setMembers]     = useState<Member[]>([]);
+    const [plans, setPlans]         = useState<Plan[]>([]);
+    const [loading, setLoading]     = useState(true);
+    const [search, setSearch]       = useState("");
+    const [showAdd, setShowAdd]     = useState(false);
+    const [filter, setFilter]       = useState<"all" | "active" | "inactive">("all");
 
-    // Add member form state
+    // Cash payment modal
+    const [cashMember, setCashMember]   = useState<Member | null>(null);
+    const [cashPlanId, setCashPlanId]   = useState("");
+    const [cashLoading, setCashLoading] = useState(false);
+    const [cashError, setCashError]     = useState("");
+
+    // Add member form
     const [form, setForm] = useState({
         name: "", email: "", password: "", membership_plan_id: "",
     });
-    const [formError, setFormError]   = useState("");
+    const [formError, setFormError]     = useState("");
     const [formLoading, setFormLoading] = useState(false);
 
     useEffect(() => {
@@ -74,9 +78,7 @@ export default function MembersPage() {
             m.name.toLowerCase().includes(search.toLowerCase()) ||
             m.email.toLowerCase().includes(search.toLowerCase());
         const matchFilter =
-            filter === "all" ? true :
-                filter === "active" ? m.active :
-                    !m.active;
+            filter === "all" ? true : filter === "active" ? m.active : !m.active;
         return matchSearch && matchFilter;
     });
 
@@ -114,16 +116,12 @@ export default function MembersPage() {
             setMembers((prev) =>
                 prev.map((m) => (m.id === data.id ? { ...m, active: data.active } : m))
             );
-        } catch {
-            console.error("Could not toggle status");
-        }
+        } catch { console.error("Could not toggle status"); }
     };
 
     const handleAssignPlan = async (member: Member, planId: string) => {
         try {
-            await api.patch(`/members/${member.id}/plan`, {
-                planId: planId || null,
-            });
+            await api.patch(`/members/${member.id}/plan`, { planId: planId || null });
             setMembers((prev) =>
                 prev.map((m) => {
                     if (m.id !== member.id) return m;
@@ -131,8 +129,38 @@ export default function MembersPage() {
                     return { ...m, membership_plan: plan };
                 })
             );
+        } catch { console.error("Could not assign plan"); }
+    };
+
+    const openCashModal = (member: Member) => {
+        const currentPlan = getPlan(member);
+        setCashMember(member);
+        setCashPlanId(currentPlan?.id ?? plans[0]?.id ?? "");
+        setCashError("");
+    };
+
+    const handleCashPayment = async () => {
+        if (!cashMember || !cashPlanId) return setCashError("Select a plan.");
+        setCashLoading(true);
+        setCashError("");
+        try {
+            const { data } = await api.post<{ expires_at: string; plan_name: string }>(
+                `/members/${cashMember.id}/cash-payment`,
+                { planId: cashPlanId }
+            );
+            const plan = plans.find((p) => p.id === cashPlanId) ?? null;
+            setMembers((prev) =>
+                prev.map((m) =>
+                    m.id === cashMember.id
+                        ? { ...m, membership_plan: plan, membership_expires_at: data.expires_at, active: true }
+                        : m
+                )
+            );
+            setCashMember(null);
         } catch {
-            console.error("Could not assign plan");
+            setCashError("Could not record payment.");
+        } finally {
+            setCashLoading(false);
         }
     };
 
@@ -143,17 +171,13 @@ export default function MembersPage() {
             new Date(m.membership_expires_at) < new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
     ).length;
 
-    if (loading) {
-        return (
-            <div className="spinner-wrap">
-                <div className="spinner" />
-            </div>
-        );
-    }
+    const selectedCashPlan = plans.find((p) => p.id === cashPlanId);
+
+    if (loading) return <div className="spinner-wrap"><div className="spinner" /></div>;
 
     return (
         <>
-            {/* ── HEADER ── */}
+            {/* HEADER */}
             <div className="dash-header">
                 <div>
                     <div className="dash-title">Members</div>
@@ -172,7 +196,7 @@ export default function MembersPage() {
                 </button>
             </div>
 
-            {/* ── FILTERS ── */}
+            {/* FILTERS */}
             <div style={{ display: "flex", gap: 12, marginBottom: 24, alignItems: "center" }}>
                 <input
                     placeholder="Search name or email..."
@@ -186,40 +210,34 @@ export default function MembersPage() {
                     }}
                 />
                 {(["all", "active", "inactive"] as const).map((f) => (
-                    <button key={f} onClick={() => setFilter(f)}
-                            style={{
-                                padding: "8px 16px", borderRadius: 8, fontSize: 12,
-                                letterSpacing: "0.08em", textTransform: "uppercase",
-                                cursor: "pointer", transition: "all .2s",
-                                fontFamily: "DM Sans, sans-serif",
-                                background: filter === f ? "var(--accent-subtle)" : "transparent",
-                                border: `1px solid ${filter === f ? "var(--accent-border)" : "var(--border)"}`,
-                                color: filter === f ? "var(--accent)" : "var(--muted2)",
-                            }}>
+                    <button key={f} onClick={() => setFilter(f)} style={{
+                        padding: "8px 16px", borderRadius: 8, fontSize: 12,
+                        letterSpacing: "0.08em", textTransform: "uppercase",
+                        cursor: "pointer", transition: "all .2s", fontFamily: "DM Sans, sans-serif",
+                        background: filter === f ? "var(--accent-subtle)" : "transparent",
+                        border: `1px solid ${filter === f ? "var(--accent-border)" : "var(--border)"}`,
+                        color: filter === f ? "var(--accent)" : "var(--muted2)",
+                    }}>
                         {f}
                     </button>
                 ))}
             </div>
 
-            {/* ── TABLE ── */}
+            {/* TABLE */}
             <div className="member-table">
-                {/* Header */}
                 <div style={{
                     display: "grid",
-                    gridTemplateColumns: "1fr 200px 160px 140px 100px",
+                    gridTemplateColumns: "1fr 200px 44px 160px 140px 100px",
                     gap: 12, padding: "12px 20px",
                     borderBottom: "1px solid var(--border)",
                 }}>
-                    {["Member", "Plan", "Expires", "Joined", "Status"].map((col) => (
-                        <div key={col} className="mt-col">{col}</div>
+                    {["Member", "Plan", "", "Expires", "Joined", "Status"].map((col, i) => (
+                        <div key={i} className="mt-col">{col}</div>
                     ))}
                 </div>
 
                 {filtered.length === 0 ? (
-                    <div style={{
-                        padding: "40px 20px", textAlign: "center",
-                        color: "var(--muted2)", fontSize: 14,
-                    }}>
+                    <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--muted2)", fontSize: 14 }}>
                         {search ? "No members match your search." : "No members yet."}
                     </div>
                 ) : (
@@ -230,7 +248,7 @@ export default function MembersPage() {
                         return (
                             <div key={member.id} style={{
                                 display: "grid",
-                                gridTemplateColumns: "1fr 200px 160px 140px 100px",
+                                gridTemplateColumns: "1fr 200px 44px 160px 140px 100px",
                                 gap: 12, padding: "14px 20px",
                                 borderBottom: "1px solid var(--border)",
                                 alignItems: "center", transition: "background .15s",
@@ -265,16 +283,28 @@ export default function MembersPage() {
                                     ))}
                                 </select>
 
+                                {/* Cash payment button */}
+                                <button
+                                    onClick={() => openCashModal(member)}
+                                    title="Record cash payment"
+                                    style={{
+                                        background: "var(--accent-subtle)",
+                                        border: "1px solid var(--accent-border)",
+                                        borderRadius: 6, padding: "6px 8px",
+                                        fontSize: 14, cursor: "pointer",
+                                        lineHeight: 1,
+                                    }}
+                                >
+                                    💵
+                                </button>
+
                                 {/* Expiry */}
-                                <div style={{
-                                    fontSize: 12,
-                                    color: expired ? "var(--danger)" : "var(--muted2)",
-                                }}>
+                                <div style={{ fontSize: 12, color: expired ? "var(--danger)" : "var(--muted2)" }}>
                                     {formatDate(member.membership_expires_at)}
                                     {expired && (
-                                        <span style={{ marginLeft: 6, fontSize: 10,
-                                            background: "var(--danger-subtle)",
-                                            color: "var(--danger)",
+                                        <span style={{
+                                            marginLeft: 6, fontSize: 10,
+                                            background: "var(--danger-subtle)", color: "var(--danger)",
                                             border: "1px solid var(--danger-border)",
                                             borderRadius: 4, padding: "1px 5px",
                                         }}>expired</span>
@@ -301,63 +331,33 @@ export default function MembersPage() {
                 )}
             </div>
 
-            {/* ── ADD MEMBER MODAL ── */}
-            {showAdd && (
+            {/* CASH PAYMENT MODAL */}
+            {cashMember && (
                 <div style={{
                     position: "fixed", inset: 0, zIndex: 100,
                     background: "rgba(0,0,0,0.7)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    padding: 24,
+                    display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
                 }}
-                     onClick={(e) => e.target === e.currentTarget && setShowAdd(false)}
+                     onClick={(e) => e.target === e.currentTarget && setCashMember(null)}
                 >
                     <div className="fade-in" style={{
-                        background: "var(--surface)",
-                        border: "1px solid var(--border)",
-                        borderRadius: 16, padding: 40,
-                        width: "100%", maxWidth: 440,
+                        background: "var(--surface)", border: "1px solid var(--border)",
+                        borderRadius: 16, padding: 40, width: "100%", maxWidth: 400,
                     }}>
-                        <h2 className="fh" style={{ fontSize: 36, marginBottom: 6 }}>
-                            Add<br />member
-                        </h2>
-                        <p className="fs">Create a member account manually.</p>
+                        <div style={{ fontSize: 32, marginBottom: 12 }}>💵</div>
+                        <h2 className="fh" style={{ fontSize: 28, marginBottom: 4 }}>Cash payment</h2>
+                        <p style={{ fontSize: 13, color: "var(--muted2)", marginBottom: 24 }}>
+                            Record a cash payment for <strong style={{ color: "var(--text)" }}>{cashMember.name}</strong>.
+                            This will activate their membership.
+                        </p>
 
-                        {formError && <div className="error-msg">{formError}</div>}
-
-                        <div className="field">
-                            <label>Full name</label>
-                            <input
-                                placeholder="Alex Martens"
-                                value={form.name}
-                                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                            />
-                        </div>
+                        {cashError && <div className="error-msg">{cashError}</div>}
 
                         <div className="field">
-                            <label>Email</label>
-                            <input
-                                type="email"
-                                placeholder="alex@example.com"
-                                value={form.email}
-                                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                            />
-                        </div>
-
-                        <div className="field">
-                            <label>Temporary password</label>
-                            <input
-                                type="password"
-                                placeholder="Min. 6 characters"
-                                value={form.password}
-                                onChange={(e) => setForm({ ...form, password: e.target.value })}
-                            />
-                        </div>
-
-                        <div className="field">
-                            <label>Membership plan (optional)</label>
+                            <label>Membership plan</label>
                             <select
-                                value={form.membership_plan_id}
-                                onChange={(e) => setForm({ ...form, membership_plan_id: e.target.value })}
+                                value={cashPlanId}
+                                onChange={(e) => setCashPlanId(e.target.value)}
                                 style={{
                                     width: "100%", background: "var(--input-bg)",
                                     border: "1px solid var(--border)", borderRadius: 10,
@@ -365,6 +365,82 @@ export default function MembersPage() {
                                     color: "var(--text)", outline: "none",
                                     fontFamily: "DM Sans, sans-serif",
                                 }}
+                            >
+                                <option value="">Select a plan...</option>
+                                {plans.map((p) => (
+                                    <option key={p.id} value={p.id}>
+                                        {p.name} — €{p.price} / {p.duration_months} month{p.duration_months !== 1 ? "s" : ""}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {selectedCashPlan && (
+                            <div style={{
+                                background: "var(--accent-subtle)", border: "1px solid var(--accent-border)",
+                                borderRadius: 10, padding: "12px 16px", marginBottom: 20, fontSize: 13,
+                                color: "var(--accent)",
+                            }}>
+                                ✓ €{selectedCashPlan.price} — membership active for {selectedCashPlan.duration_months} month{selectedCashPlan.duration_months !== 1 ? "s" : ""}
+                            </div>
+                        )}
+
+                        <div style={{ display: "flex", gap: 10 }}>
+                            <button className="btn-p" onClick={handleCashPayment} disabled={cashLoading || !cashPlanId} style={{ flex: 1 }}>
+                                {cashLoading ? "Recording..." : "Record payment →"}
+                            </button>
+                            <button className="btn-ghost" onClick={() => setCashMember(null)}
+                                    style={{ width: "auto", padding: "14px 20px", marginTop: 0 }}>
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ADD MEMBER MODAL */}
+            {showAdd && (
+                <div style={{
+                    position: "fixed", inset: 0, zIndex: 100,
+                    background: "rgba(0,0,0,0.7)",
+                    display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+                }}
+                     onClick={(e) => e.target === e.currentTarget && setShowAdd(false)}
+                >
+                    <div className="fade-in" style={{
+                        background: "var(--surface)", border: "1px solid var(--border)",
+                        borderRadius: 16, padding: 40, width: "100%", maxWidth: 440,
+                    }}>
+                        <h2 className="fh" style={{ fontSize: 36, marginBottom: 6 }}>Add<br />member</h2>
+                        <p className="fs">Create a member account manually.</p>
+
+                        {formError && <div className="error-msg">{formError}</div>}
+
+                        <div className="field">
+                            <label>Full name</label>
+                            <input placeholder="Alex Martens" value={form.name}
+                                   onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                        </div>
+                        <div className="field">
+                            <label>Email</label>
+                            <input type="email" placeholder="alex@example.com" value={form.email}
+                                   onChange={(e) => setForm({ ...form, email: e.target.value })} />
+                        </div>
+                        <div className="field">
+                            <label>Temporary password</label>
+                            <input type="password" placeholder="Min. 6 characters" value={form.password}
+                                   onChange={(e) => setForm({ ...form, password: e.target.value })} />
+                        </div>
+                        <div className="field">
+                            <label>Membership plan (optional)</label>
+                            <select value={form.membership_plan_id}
+                                    onChange={(e) => setForm({ ...form, membership_plan_id: e.target.value })}
+                                    style={{
+                                        width: "100%", background: "var(--input-bg)",
+                                        border: "1px solid var(--border)", borderRadius: 10,
+                                        padding: "14px 16px", fontSize: 14,
+                                        color: "var(--text)", outline: "none", fontFamily: "DM Sans, sans-serif",
+                                    }}
                             >
                                 <option value="">No plan yet</option>
                                 {plans.map((p) => (
@@ -376,8 +452,7 @@ export default function MembersPage() {
                         </div>
 
                         <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-                            <button className="btn-p" onClick={handleAdd} disabled={formLoading}
-                                    style={{ flex: 1 }}>
+                            <button className="btn-p" onClick={handleAdd} disabled={formLoading} style={{ flex: 1 }}>
                                 {formLoading ? "Creating..." : "Create member →"}
                             </button>
                             <button className="btn-ghost" onClick={() => setShowAdd(false)}

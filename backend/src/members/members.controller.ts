@@ -17,8 +17,6 @@ import { JwtGuard } from '../auth/guards/jwt.guard';
 export class MembersController {
     constructor(private readonly membersService: MembersService) {}
 
-    // ⚠ Static routes MUST come before parameterized routes (:id)
-
     @Get('me')
     getMyProfile(@Req() req: { token: string }) {
         return this.membersService.getMyProfile(req.token);
@@ -65,5 +63,14 @@ export class MembersController {
         @Req() req: { token: string },
     ) {
         return this.membersService.assignPlan(id, planId, req.token);
+    }
+
+    @Post(':id/cash-payment')
+    recordCashPayment(
+        @Param('id') id: string,
+        @Body('planId') planId: string,
+        @Req() req: { token: string },
+    ) {
+        return this.membersService.recordCashPayment(id, planId, req.token);
     }
 }
