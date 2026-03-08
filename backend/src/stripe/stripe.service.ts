@@ -194,6 +194,7 @@ export class StripeService {
                 amount: plan.price,
                 status: 'pending',
                 stripe_session_id: session.id,
+                membership_plan_id: planId,  // ← voeg dit toe
             });
 
         return { url: session.url, sessionId: session.id };

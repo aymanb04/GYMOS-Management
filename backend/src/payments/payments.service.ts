@@ -29,10 +29,10 @@ export class PaymentsService {
         const { data: payments } = await service
             .from('payments')
             .select(`
-                id, amount, created_at, status,
-                user:users(name, email),
-                plan:membership_plans(name)
-            `)
+        id, amount, created_at, status,
+        user:users(name, email),
+        plan:membership_plans(name)
+    `)
             .eq('gym_id', gymId)
             .eq('status', 'paid')
             .order('created_at', { ascending: false });
