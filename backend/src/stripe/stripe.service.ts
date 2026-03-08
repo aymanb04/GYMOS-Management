@@ -241,7 +241,17 @@ export class StripeService {
 
         // Set membership expiry
         const months = Number(duration_months ?? 1);
-        const expiry = new Date();
+        const { data: currentUser } = await serviceClient
+            .from('users')
+            .select('membership_expires_at')
+            .eq('id', user_id)
+            .single();
+
+        const baseDate = currentUser?.membership_expires_at && new Date(currentUser.membership_expires_at) > new Date()
+            ? new Date(currentUser.membership_expires_at)
+            : new Date();
+
+        const expiry = new Date(baseDate);
         expiry.setMonth(expiry.getMonth() + months);
 
         await serviceClient

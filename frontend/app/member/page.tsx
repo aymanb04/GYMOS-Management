@@ -56,14 +56,16 @@ export default function MemberPage() {
     const { user, logout } = useAuth();
     const { gym } = useGym();
 
-    const [profile, setProfile]         = useState<MemberProfile | null>(null);
-    const [classes, setClasses]         = useState<GymClass[]>([]);
-    const [plans, setPlans]             = useState<Plan[]>([]);
-    const [loading, setLoading]         = useState(true);
-    const [tab, setTab]                 = useState<Tab>("membership");
-    const [activeDay, setActiveDay]     = useState<number>(new Date().getDay() === 0 ? 6 : new Date().getDay() - 1);
-    const [payLoading, setPayLoading]   = useState<string | null>(null);
-    const [showPlans, setShowPlans]     = useState(false);
+    const [profile, setProfile]       = useState<MemberProfile | null>(null);
+    const [classes, setClasses]       = useState<GymClass[]>([]);
+    const [plans, setPlans]           = useState<Plan[]>([]);
+    const [loading, setLoading]       = useState(true);
+    const [tab, setTab]               = useState<Tab>("membership");
+    const [activeDay, setActiveDay]   = useState<number>(new Date().getDay() === 0 ? 6 : new Date().getDay() - 1);
+    const [payLoading, setPayLoading] = useState<string | null>(null);
+    const [showPlans, setShowPlans]   = useState(false);
+
+    const stripeEnabled = !!(gym?.features as Record<string, boolean> | null)?.stripe_payments;
 
     useEffect(() => {
         Promise.all([
@@ -176,18 +178,22 @@ export default function MemberPage() {
                                                     <div style={{ background: "var(--danger-subtle)", border: "1px solid var(--danger-border)", borderRadius: 10, padding: "14px 18px", color: "var(--danger)", fontSize: 14, marginBottom: 16 }}>
                                                         ⚠ Expired on {formatDate(profile.membership_expires_at)}
                                                     </div>
-                                                    <button onClick={() => setShowPlans(!showPlans)} className="btn-p" style={{ width: "auto", padding: "12px 24px", fontSize: 14 }}>
-                                                        Renew membership →
-                                                    </button>
+                                                    {stripeEnabled && (
+                                                        <button onClick={() => setShowPlans(!showPlans)} className="btn-p" style={{ width: "auto", padding: "12px 24px", fontSize: 14 }}>
+                                                            Renew membership →
+                                                        </button>
+                                                    )}
                                                 </div>
                                             ) : isExpiringSoon ? (
                                                 <div>
                                                     <div style={{ background: "rgba(255,180,0,0.06)", border: "1px solid rgba(255,180,0,0.2)", borderRadius: 10, padding: "14px 18px", color: "#FFB400", fontSize: 14, marginBottom: 16 }}>
                                                         ⏳ Expires in {days} day{days !== 1 ? "s" : ""} — {formatDate(profile.membership_expires_at)}
                                                     </div>
-                                                    <button onClick={() => setShowPlans(!showPlans)} style={{ padding: "10px 20px", borderRadius: 8, background: "transparent", border: "1px solid rgba(255,180,0,0.3)", color: "#FFB400", fontSize: 13, cursor: "pointer", fontFamily: "DM Sans, sans-serif" }}>
-                                                        Renew early →
-                                                    </button>
+                                                    {stripeEnabled && (
+                                                        <button onClick={() => setShowPlans(!showPlans)} style={{ padding: "10px 20px", borderRadius: 8, background: "transparent", border: "1px solid rgba(255,180,0,0.3)", color: "#FFB400", fontSize: 13, cursor: "pointer", fontFamily: "DM Sans, sans-serif" }}>
+                                                            Renew early →
+                                                        </button>
+                                                    )}
                                                 </div>
                                             ) : (
                                                 <div style={{ background: "var(--accent-subtle)", border: "1px solid var(--accent-border)", borderRadius: 10, padding: "14px 18px", color: "var(--accent)", fontSize: 14 }}>
@@ -197,16 +203,20 @@ export default function MemberPage() {
                                         </>
                                     ) : (
                                         <div>
-                                            <div style={{ color: "var(--muted)", fontSize: 14, marginBottom: 20 }}>No active membership. Choose a plan to get started.</div>
-                                            <button onClick={() => setShowPlans(!showPlans)} className="btn-p" style={{ width: "auto", padding: "12px 24px", fontSize: 14 }}>
-                                                View plans →
-                                            </button>
+                                            <div style={{ color: "var(--muted)", fontSize: 14, marginBottom: stripeEnabled ? 20 : 0 }}>
+                                                No active membership.{stripeEnabled ? " Choose a plan to get started." : " Contact your gym to get started."}
+                                            </div>
+                                            {stripeEnabled && (
+                                                <button onClick={() => setShowPlans(!showPlans)} className="btn-p" style={{ width: "auto", padding: "12px 24px", fontSize: 14 }}>
+                                                    View plans →
+                                                </button>
+                                            )}
                                         </div>
                                     )}
                                 </div>
 
-                                {/* PLANS */}
-                                {showPlans && plans.length > 0 && (
+                                {/* PLANS — only shown when stripe is enabled */}
+                                {stripeEnabled && showPlans && plans.length > 0 && (
                                     <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, padding: 24, marginBottom: 16 }}>
                                         <div className="kpi-label" style={{ marginBottom: 16 }}>Choose a plan</div>
                                         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
