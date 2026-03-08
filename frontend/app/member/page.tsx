@@ -65,7 +65,7 @@ export default function MemberPage() {
     const [payLoading, setPayLoading] = useState<string | null>(null);
     const [showPlans, setShowPlans]   = useState(false);
 
-    const stripeEnabled = !!(gym?.features as Record<string, boolean> | null)?.stripe_payments;
+    const stripeEnabled = !!gym?.features?.stripe_payments;
 
     useEffect(() => {
         Promise.all([

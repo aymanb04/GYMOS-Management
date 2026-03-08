@@ -13,6 +13,7 @@ export interface Gym {
     name: string;
     subdomain: string;
     brand_color: string;
+    features: Record<string, boolean> | null;
 }
 
 interface GymContextType {
