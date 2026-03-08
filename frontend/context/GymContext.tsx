@@ -40,8 +40,6 @@ function extractSubdomain(hostname: string): string | null {
     return null;
 }
 
-// Change this to 'tkgym' when testing TK Gym locally
-//const DEV_SUBDOMAIN = "sga";
 const DEV_SUBDOMAIN = process.env.NODE_ENV === "development" ? "sga" : null;
 
 export function GymProvider({ children }: { children: ReactNode }) {
@@ -57,7 +55,6 @@ export function GymProvider({ children }: { children: ReactNode }) {
             if (process.env.NODE_ENV === "development") {
                 fetchGym("sga");
             } else {
-                // Production with no subdomain — no gym to load
                 setLoading(false);
             }
             return;
@@ -85,7 +82,7 @@ export function GymProvider({ children }: { children: ReactNode }) {
             const r = parseInt(hex.substring(0, 2), 16);
             const g = parseInt(hex.substring(2, 4), 16);
             const b = parseInt(hex.substring(4, 6), 16);
-            document.documentElement.style.setProperty("--accent-glow",  `rgba(${r}, ${g}, ${b}, 0.13)`);
+            document.documentElement.style.setProperty("--accent-glow",   `rgba(${r}, ${g}, ${b}, 0.13)`);
             document.documentElement.style.setProperty("--accent-subtle", `rgba(${r}, ${g}, ${b}, 0.06)`);
             document.documentElement.style.setProperty("--accent-border", `rgba(${r}, ${g}, ${b}, 0.2)`);
 

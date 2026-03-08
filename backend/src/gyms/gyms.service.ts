@@ -20,7 +20,7 @@ export class GymsService {
         const client = this.supabase.getServiceClient();
         const { data, error } = await client
             .from('gyms')
-            .select('id, name, subdomain, brand_color')
+            .select('id, name, subdomain, brand_color, features')
             .eq('subdomain', subdomain)
             .single();
 

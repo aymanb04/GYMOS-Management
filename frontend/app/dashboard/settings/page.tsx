@@ -26,6 +26,8 @@ function SettingsContent() {
     const { gym } = useGym();
     const searchParams = useSearchParams();
 
+    const stripeEnabled = !!gym?.features?.stripe_payments;
+
     const [gymName, setGymName]       = useState("");
     const [brandColor, setBrandColor] = useState("#CBFF00");
     const [gymSaving, setGymSaving]   = useState(false);
@@ -51,14 +53,15 @@ function SettingsContent() {
     }, [gym, user]);
 
     useEffect(() => {
-        if (user?.role !== 'admin') return;
+        if (user?.role !== 'admin' || !stripeEnabled) return;
         api.get<ConnectStatus>('/stripe/connect/status')
             .then((res) => setConnectStatus(res.data))
             .catch(console.error)
             .finally(() => setConnectChecking(false));
-    }, [user]);
+    }, [user, stripeEnabled]);
 
     useEffect(() => {
+        if (!stripeEnabled) return;
         const stripe = searchParams.get('stripe');
         if (stripe === 'success') {
             setConnectChecking(true);
@@ -66,7 +69,7 @@ function SettingsContent() {
                 .then((res) => setConnectStatus(res.data))
                 .finally(() => setConnectChecking(false));
         }
-    }, [searchParams]);
+    }, [searchParams, stripeEnabled]);
 
     const handleConnectStripe = async () => {
         setConnectLoading(true);
@@ -89,7 +92,7 @@ function SettingsContent() {
             const r = parseInt(hex.substring(0, 2), 16);
             const g = parseInt(hex.substring(2, 4), 16);
             const b = parseInt(hex.substring(4, 6), 16);
-            document.documentElement.style.setProperty("--accent-glow", `rgba(${r},${g},${b},0.13)`);
+            document.documentElement.style.setProperty("--accent-glow",   `rgba(${r},${g},${b},0.13)`);
             document.documentElement.style.setProperty("--accent-subtle", `rgba(${r},${g},${b},0.06)`);
             document.documentElement.style.setProperty("--accent-border", `rgba(${r},${g},${b},0.2)`);
             setGymSuccess(true);
@@ -134,6 +137,7 @@ function SettingsContent() {
 
             <div style={{ display: "flex", flexDirection: "column", gap: 24, maxWidth: 560 }}>
 
+                {/* GYM SETTINGS */}
                 {isAdmin && (
                     <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, padding: 32, position: "relative", overflow: "hidden" }}>
                         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "linear-gradient(90deg, var(--accent), transparent)" }} />
@@ -160,7 +164,8 @@ function SettingsContent() {
                     </div>
                 )}
 
-                {isAdmin && (
+                {/* PAYMENTS — only when stripe_payments feature is enabled */}
+                {isAdmin && stripeEnabled && (
                     <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, padding: 32 }}>
                         <div style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 700, fontSize: 20, color: "var(--text)", marginBottom: 4, textTransform: "uppercase" }}>Payments</div>
                         <p style={{ fontSize: 13, color: "var(--muted2)", marginBottom: 24 }}>Connect your Stripe account to accept membership payments from members.</p>
@@ -188,6 +193,7 @@ function SettingsContent() {
                     </div>
                 )}
 
+                {/* ACCOUNT SETTINGS */}
                 <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, padding: 32 }}>
                     <div style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 700, fontSize: 20, color: "var(--text)", marginBottom: 4, textTransform: "uppercase" }}>Account settings</div>
                     <p style={{ fontSize: 13, color: "var(--muted2)", marginBottom: 24 }}>Update your personal information and password.</p>
@@ -223,6 +229,7 @@ function SettingsContent() {
                     </button>
                 </div>
 
+                {/* DANGER ZONE */}
                 <div style={{ background: "var(--surface)", border: "1px solid var(--danger-border)", borderRadius: 16, padding: 32 }}>
                     <div style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 700, fontSize: 20, color: "var(--danger)", marginBottom: 4, textTransform: "uppercase" }}>Danger zone</div>
                     <p style={{ fontSize: 13, color: "var(--muted2)", marginBottom: 20 }}>Irreversible actions. Be careful.</p>
