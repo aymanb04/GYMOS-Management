@@ -8,6 +8,7 @@ import { MembersModule } from './members/members.module';
 import { PlansModule } from './plans/plans.module';
 import { ClassesModule } from './classes/classes.module';
 import { StripeModule } from './stripe/stripe.module';
+import { PaymentsModule } from './payments/payments.module';
 import { SupabaseModule } from './supabase.module';
 
 @Module({
@@ -20,6 +21,7 @@ import { SupabaseModule } from './supabase.module';
         PlansModule,
         ClassesModule,
         StripeModule,
+        PaymentsModule,
     ],
     controllers: [AppController],
     providers: [AppService],
