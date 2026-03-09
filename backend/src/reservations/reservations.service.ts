@@ -175,12 +175,11 @@ export class ReservationsService {
             throw new ForbiddenException('Admins only');
         }
 
-        const { data, error } = await this.supabase.getServiceClient()
+        const service = this.supabase.getServiceClient();
+
+        const { data: reservations, error } = await service
             .from('reservations')
-            .select(`
-                id, reserved_date, status, created_at,
-                user:users(id, name, email)
-            `)
+            .select('id, reserved_date, status, created_at, user_id')
             .eq('lesson_id', lessonId)
             .eq('gym_id', profile.gym_id)
             .eq('reserved_date', date)
@@ -188,7 +187,20 @@ export class ReservationsService {
             .order('created_at', { ascending: true });
 
         if (error) throw new Error(error.message);
-        return data ?? [];
+        if (!reservations?.length) return [];
+
+        const userIds = reservations.map((r) => r.user_id);
+        const { data: users } = await service
+            .from('users')
+            .select('id, name, email')
+            .in('id', userIds);
+
+        const userMap = Object.fromEntries((users ?? []).map((u) => [u.id, u]));
+
+        return reservations.map((r) => ({
+            ...r,
+            user: userMap[r.user_id] ?? { id: r.user_id, name: 'Unknown', email: '' },
+        }));
     }
 
     // Get booking data for member portal (counts + user's bookings for a date)
