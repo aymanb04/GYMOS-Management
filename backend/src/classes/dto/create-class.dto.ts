@@ -1,4 +1,4 @@
-import { IsInt, IsNotEmpty, IsOptional, IsString, Matches, Max, Min } from 'class-validator';
+import {IsBoolean, IsInt, IsNotEmpty, IsOptional, IsString, Matches, Max, Min} from 'class-validator';
 
 export class CreateClassDto {
     @IsString()
@@ -29,4 +29,8 @@ export class CreateClassDto {
     @IsString()
     @IsOptional()
     instructor?: string;
+
+    @IsBoolean()
+    @IsOptional()
+    capacity_enforced?: boolean;
 }

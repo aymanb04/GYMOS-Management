@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useGym } from "@/context/GymContext";
 import { api } from "@/lib/api";
@@ -24,6 +24,7 @@ interface GymClass {
     day_of_week: number;
     time_of_day: string;
     capacity: number;
+    capacity_enforced: boolean;
     description: string | null;
     duration_minutes: number | null;
     instructor: string | null;
@@ -37,6 +38,11 @@ interface Plan {
     description: string | null;
 }
 
+interface ClassDateData {
+    counts: Record<string, number>;
+    myBookings: Record<string, string>; // lessonId -> reservationId
+}
+
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const DAYS_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -48,6 +54,16 @@ function formatDate(iso: string | null) {
 function daysUntil(iso: string | null): number | null {
     if (!iso) return null;
     return Math.ceil((new Date(iso).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+}
+
+// Get the next occurrence of a given day_of_week (0=Mon ... 6=Sun) from today
+function getNextDateForDay(dayIndex: number): string {
+    const today = new Date();
+    const todayIndex = today.getDay() === 0 ? 6 : today.getDay() - 1;
+    const diff = (dayIndex - todayIndex + 7) % 7;
+    const target = new Date(today);
+    target.setDate(today.getDate() + diff);
+    return target.toISOString().split("T")[0];
 }
 
 type Tab = "membership" | "classes";
@@ -65,6 +81,10 @@ export default function MemberPage() {
     const [payLoading, setPayLoading] = useState<string | null>(null);
     const [showPlans, setShowPlans]   = useState(false);
 
+    const [classDateData, setClassDateData]   = useState<ClassDateData>({ counts: {}, myBookings: {} });
+    const [bookingLoading, setBookingLoading] = useState<string | null>(null);
+    const [bookingError, setBookingError]     = useState<string | null>(null);
+
     const stripeEnabled = !!gym?.features?.stripe_payments;
 
     useEffect(() => {
@@ -81,6 +101,49 @@ export default function MemberPage() {
             .catch(console.error)
             .finally(() => setLoading(false));
     }, []);
+
+    const fetchClassDataForDay = useCallback(async (dayIndex: number) => {
+        const date = getNextDateForDay(dayIndex);
+        try {
+            const res = await api.get<ClassDateData>(`/reservations/date/${date}`);
+            setClassDateData(res.data);
+        } catch {
+            setClassDateData({ counts: {}, myBookings: {} });
+        }
+    }, []);
+
+    useEffect(() => {
+        if (tab === "classes") {
+            fetchClassDataForDay(activeDay);
+        }
+    }, [tab, activeDay, fetchClassDataForDay]);
+
+    const handleBook = async (lessonId: string) => {
+        setBookingLoading(lessonId);
+        setBookingError(null);
+        const date = getNextDateForDay(activeDay);
+        try {
+            await api.post("/reservations", { lessonId, date });
+            await fetchClassDataForDay(activeDay);
+        } catch (err: any) {
+            setBookingError(err?.response?.data?.message ?? "Could not book class.");
+        } finally {
+            setBookingLoading(null);
+        }
+    };
+
+    const handleCancel = async (reservationId: string, lessonId: string) => {
+        setBookingLoading(lessonId);
+        setBookingError(null);
+        try {
+            await api.delete(`/reservations/${reservationId}`);
+            await fetchClassDataForDay(activeDay);
+        } catch (err: any) {
+            setBookingError(err?.response?.data?.message ?? "Could not cancel booking.");
+        } finally {
+            setBookingLoading(null);
+        }
+    };
 
     const handlePay = async (planId: string) => {
         setPayLoading(planId);
@@ -215,7 +278,6 @@ export default function MemberPage() {
                                     )}
                                 </div>
 
-                                {/* PLANS — only shown when stripe is enabled */}
                                 {stripeEnabled && showPlans && plans.length > 0 && (
                                     <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, padding: 24, marginBottom: 16 }}>
                                         <div className="kpi-label" style={{ marginBottom: 16 }}>Choose a plan</div>
@@ -241,7 +303,6 @@ export default function MemberPage() {
                                     </div>
                                 )}
 
-                                {/* ACCOUNT CARD */}
                                 <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, padding: 24, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                                     <div>
                                         <div className="kpi-label" style={{ marginBottom: 4 }}>Account</div>
@@ -255,6 +316,7 @@ export default function MemberPage() {
                         {/* CLASSES TAB */}
                         {tab === "classes" && (
                             <>
+                                {/* DAY SELECTOR */}
                                 <div style={{ display: "flex", gap: 4, marginBottom: 20, overflowX: "auto", paddingBottom: 4 }}>
                                     {DAYS_SHORT.map((day, i) => {
                                         const isToday = i === (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1);
@@ -273,10 +335,19 @@ export default function MemberPage() {
                                     })}
                                 </div>
 
-                                <div style={{ marginBottom: 8 }}>
-                                    <span style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 700, fontSize: 20, color: "var(--text)", textTransform: "uppercase" }}>{DAYS[activeDay]}</span>
-                                    <span style={{ fontSize: 13, color: "var(--muted2)", marginLeft: 10 }}>{classesByDay[activeDay].length} class{classesByDay[activeDay].length !== 1 ? "es" : ""}</span>
+                                <div style={{ marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                    <div>
+                                        <span style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 700, fontSize: 20, color: "var(--text)", textTransform: "uppercase" }}>{DAYS[activeDay]}</span>
+                                        <span style={{ fontSize: 13, color: "var(--muted2)", marginLeft: 10 }}>{classesByDay[activeDay].length} class{classesByDay[activeDay].length !== 1 ? "es" : ""}</span>
+                                    </div>
+                                    <span style={{ fontSize: 12, color: "var(--muted2)" }}>{getNextDateForDay(activeDay)}</span>
                                 </div>
+
+                                {bookingError && (
+                                    <div style={{ background: "var(--danger-subtle)", border: "1px solid var(--danger-border)", borderRadius: 8, padding: "10px 14px", color: "var(--danger)", fontSize: 13, marginBottom: 12 }}>
+                                        {bookingError}
+                                    </div>
+                                )}
 
                                 {classesByDay[activeDay].length === 0 ? (
                                     <div style={{ textAlign: "center", padding: "48px 20px", color: "var(--muted2)", fontSize: 14, background: "var(--surface)", borderRadius: 14, border: "1px solid var(--border)" }}>
@@ -284,21 +355,55 @@ export default function MemberPage() {
                                     </div>
                                 ) : (
                                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                                        {classesByDay[activeDay].map((c) => (
-                                            <div key={c.id} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, padding: "18px 20px", display: "flex", alignItems: "center", gap: 16 }}>
-                                                <div style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 700, fontSize: 22, color: "var(--accent)", minWidth: 52 }}>
-                                                    {c.time_of_day.slice(0, 5)}
-                                                </div>
-                                                <div style={{ flex: 1 }}>
-                                                    <div style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 700, fontSize: 17, color: "var(--text)", textTransform: "uppercase", marginBottom: 2 }}>{c.title}</div>
-                                                    <div style={{ fontSize: 12, color: "var(--muted)", display: "flex", gap: 10, flexWrap: "wrap" }}>
-                                                        {c.duration_minutes && <span>⏱ {c.duration_minutes} min</span>}
-                                                        {c.instructor && <span>👤 {c.instructor}</span>}
-                                                        <span>👥 {c.capacity} spots</span>
+                                        {classesByDay[activeDay].map((c) => {
+                                            const bookedCount = classDateData.counts[c.id] ?? 0;
+                                            const myReservationId = classDateData.myBookings[c.id];
+                                            const isBooked = !!myReservationId;
+                                            const isFull = c.capacity_enforced && bookedCount >= c.capacity;
+                                            const isLoading = bookingLoading === c.id;
+
+                                            return (
+                                                <div key={c.id} style={{
+                                                    background: isBooked ? "var(--accent-subtle)" : "var(--surface)",
+                                                    border: `1px solid ${isBooked ? "var(--accent-border)" : "var(--border)"}`,
+                                                    borderRadius: 14, padding: "18px 20px",
+                                                    display: "flex", alignItems: "center", gap: 16,
+                                                }}>
+                                                    <div style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 700, fontSize: 22, color: "var(--accent)", minWidth: 52 }}>
+                                                        {c.time_of_day.slice(0, 5)}
+                                                    </div>
+                                                    <div style={{ flex: 1 }}>
+                                                        <div style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 700, fontSize: 17, color: "var(--text)", textTransform: "uppercase", marginBottom: 2 }}>{c.title}</div>
+                                                        <div style={{ fontSize: 12, color: "var(--muted)", display: "flex", gap: 10, flexWrap: "wrap" }}>
+                                                            {c.duration_minutes && <span>⏱ {c.duration_minutes} min</span>}
+                                                            {c.instructor && <span>👤 {c.instructor}</span>}
+                                                            <span style={{ color: isFull ? "var(--danger)" : "var(--muted)" }}>
+                                                                👥 {bookedCount}/{c.capacity}{isFull ? " — full" : ""}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        {isBooked ? (
+                                                            <button
+                                                                onClick={() => handleCancel(myReservationId, c.id)}
+                                                                disabled={isLoading}
+                                                                style={{ padding: "8px 16px", borderRadius: 8, background: "transparent", border: "1px solid var(--accent-border)", color: "var(--accent)", fontSize: 12, fontFamily: "DM Sans, sans-serif", cursor: "pointer", whiteSpace: "nowrap" }}
+                                                            >
+                                                                {isLoading ? "..." : "✓ Booked · Cancel"}
+                                                            </button>
+                                                        ) : (
+                                                            <button
+                                                                onClick={() => handleBook(c.id)}
+                                                                disabled={isLoading || isFull}
+                                                                style={{ padding: "8px 16px", borderRadius: 8, background: isFull ? "transparent" : "var(--accent)", border: isFull ? "1px solid var(--border)" : "none", color: isFull ? "var(--muted2)" : "var(--bg)", fontSize: 12, fontFamily: "DM Sans, sans-serif", fontWeight: 600, cursor: isFull ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}
+                                                            >
+                                                                {isLoading ? "..." : isFull ? "Full" : "Book →"}
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </>
