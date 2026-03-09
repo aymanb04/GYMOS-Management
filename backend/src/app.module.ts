@@ -10,6 +10,7 @@ import { ClassesModule } from './classes/classes.module';
 import { StripeModule } from './stripe/stripe.module';
 import { PaymentsModule } from './payments/payments.module';
 import { SupabaseModule } from './supabase.module';
+import {ReservationsModule} from "./reservations/reservations.module";
 
 @Module({
     imports: [
@@ -22,6 +23,7 @@ import { SupabaseModule } from './supabase.module';
         ClassesModule,
         StripeModule,
         PaymentsModule,
+        ReservationsModule,
     ],
     controllers: [AppController],
     providers: [AppService],
