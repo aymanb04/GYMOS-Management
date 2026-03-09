@@ -81,6 +81,7 @@ export default function MemberPage() {
     const [payLoading, setPayLoading] = useState<string | null>(null);
     const [showPlans, setShowPlans]   = useState(false);
 
+    const [classDateCache, setClassDateCache] = useState<Record<string, ClassDateData>>({});
     const [classDateData, setClassDateData]   = useState<ClassDateData>({ counts: {}, myBookings: {} });
     const [bookingLoading, setBookingLoading] = useState<string | null>(null);
     const [bookingError, setBookingError]     = useState<string | null>(null);
@@ -102,15 +103,22 @@ export default function MemberPage() {
             .finally(() => setLoading(false));
     }, []);
 
-    const fetchClassDataForDay = useCallback(async (dayIndex: number) => {
+    const fetchClassDataForDay = useCallback(async (dayIndex: number, forceRefresh = false) => {
         const date = getNextDateForDay(dayIndex);
+
+        if (!forceRefresh && classDateCache[date]) {
+            setClassDateData(classDateCache[date]);
+            return;
+        }
+
         try {
             const res = await api.get<ClassDateData>(`/reservations/date/${date}`);
+            setClassDateCache((prev) => ({ ...prev, [date]: res.data }));
             setClassDateData(res.data);
         } catch {
             setClassDateData({ counts: {}, myBookings: {} });
         }
-    }, []);
+    }, [classDateCache]);
 
     useEffect(() => {
         if (tab === "classes") {
@@ -124,7 +132,7 @@ export default function MemberPage() {
         const date = getNextDateForDay(activeDay);
         try {
             await api.post("/reservations", { lessonId, date });
-            await fetchClassDataForDay(activeDay);
+            await fetchClassDataForDay(activeDay, true);
         } catch (err: any) {
             setBookingError(err?.response?.data?.message ?? "Could not book class.");
         } finally {
@@ -137,7 +145,7 @@ export default function MemberPage() {
         setBookingError(null);
         try {
             await api.delete(`/reservations/${reservationId}`);
-            await fetchClassDataForDay(activeDay);
+            await fetchClassDataForDay(activeDay, true);
         } catch (err: any) {
             setBookingError(err?.response?.data?.message ?? "Could not cancel booking.");
         } finally {
