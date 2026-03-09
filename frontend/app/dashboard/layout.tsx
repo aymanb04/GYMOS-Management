@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useGym } from "@/context/GymContext";
-import {useEffect} from "react";
+import { useEffect, useState } from "react";
 
 const NAV = [
     { href: "/dashboard",          label: "Overview",  icon: "▦" },
@@ -20,11 +20,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const { gym } = useGym();
     const pathname = usePathname();
     const router = useRouter();
+    const [sidebarOpen, setSidebarOpen] = useState(false);
+
     useEffect(() => {
-        if (!loading && user?.role === 'member') {
-            router.replace('/member');
+        if (!loading && user?.role === "member") {
+            router.replace("/member");
         }
     }, [user, loading, router]);
+
+    // Close sidebar on route change
+    useEffect(() => {
+        setSidebarOpen(false);
+    }, [pathname]);
 
     const handleLogout = () => {
         logout();
@@ -37,8 +44,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     return (
         <div className="dash-root">
-            <aside className="sidebar">
-                {/* Show gym name if available, else GymOS */}
+            {/* HAMBURGER — mobile only */}
+            <button
+                className="sb-hamburger"
+                onClick={() => setSidebarOpen(true)}
+                aria-label="Open menu"
+            >
+                ☰
+            </button>
+
+            {/* OVERLAY — mobile only */}
+            <div
+                className={`sb-overlay ${sidebarOpen ? "open" : ""}`}
+                onClick={() => setSidebarOpen(false)}
+            />
+
+            {/* SIDEBAR */}
+            <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
                 <div className="sb-logo">{gym?.name ?? "GymOS"}</div>
 
                 <span className="sb-section">Main</span>
@@ -67,20 +89,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                             onClick={handleLogout}
                             title="Sign out"
                             style={{
-                                background: "none",
-                                border: "none",
-                                cursor: "pointer",
-                                color: "var(--muted2)",
-                                fontSize: 16,
-                                padding: 4,
-                                transition: "color .2s",
+                                background: "none", border: "none",
+                                cursor: "pointer", color: "var(--muted2)",
+                                fontSize: 16, padding: 4, transition: "color .2s",
                             }}
-                            onMouseEnter={(e) =>
-                                ((e.target as HTMLElement).style.color = "var(--accent)")
-                            }
-                            onMouseLeave={(e) =>
-                                ((e.target as HTMLElement).style.color = "var(--muted2)")
-                            }
+                            onMouseEnter={(e) => ((e.target as HTMLElement).style.color = "var(--accent)")}
+                            onMouseLeave={(e) => ((e.target as HTMLElement).style.color = "var(--muted2)")}
                         >
                             ⎋
                         </button>

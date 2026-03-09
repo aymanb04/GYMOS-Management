@@ -85,7 +85,7 @@ export default function RevenuePage() {
             </div>
 
             {/* KPI CARDS */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, marginBottom: 28 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16, marginBottom: 28 }}>
                 {[
                     { label: "Total revenue", value: fmt(data.kpis.totalRevenue), sub: `${data.kpis.totalPayments} payments` },
                     {
@@ -103,20 +103,20 @@ export default function RevenuePage() {
                         {i === 0 && <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "linear-gradient(90deg, var(--accent), transparent)" }} />}
                         <div className="kpi-label">{kpi.label}</div>
                         <div style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 900, fontSize: 32, color: "var(--text)", margin: "6px 0 4px" }}>{kpi.value}</div>
-                        <div style={{ fontSize: 12, color: kpi.accent ? "var(--accent)" : kpi.warn ? "#FFB400" : "var(--muted2)" }}>{kpi.sub}</div>
+                        <div style={{ fontSize: 12, color: (kpi as any).accent ? "var(--accent)" : (kpi as any).warn ? "#FFB400" : "var(--muted2)" }}>{kpi.sub}</div>
                     </div>
                 ))}
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: 20, marginBottom: 28 }}>
-                {/* CHART */}
+            {/* CHART + BY PLAN — stacks on mobile */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 20, marginBottom: 28 }}>
                 <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, padding: 24 }}>
                     <div className="kpi-label" style={{ marginBottom: 4 }}>Monthly revenue</div>
                     <div style={{ fontSize: 12, color: "var(--muted2)", marginBottom: 8 }}>Last 6 months</div>
                     <MiniBarChart data={data.monthlyData} />
                     <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
                         {data.monthlyData.map((d, i) => (
-                            <div key={i} style={{ textAlign: "center", flex: 1 }}>
+                            <div key={i} style={{ textAlign: "center", flex: 1, minWidth: 0 }}>
                                 <div style={{ fontSize: 11, color: "var(--muted2)" }}>{d.month}</div>
                                 <div style={{ fontSize: 12, color: "var(--text)", fontWeight: 600 }}>{d.revenue > 0 ? fmt(d.revenue) : "—"}</div>
                             </div>
@@ -124,7 +124,6 @@ export default function RevenuePage() {
                     </div>
                 </div>
 
-                {/* BY PLAN */}
                 <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, padding: 24 }}>
                     <div className="kpi-label" style={{ marginBottom: 16 }}>By plan</div>
                     {data.byPlan.length === 0 ? (
@@ -162,20 +161,20 @@ export default function RevenuePage() {
                             <thead>
                             <tr style={{ borderBottom: "1px solid var(--border)" }}>
                                 {["Member", "Plan", "Amount", "Date"].map(h => (
-                                    <th key={h} style={{ textAlign: "left", padding: "8px 12px", color: "var(--muted2)", fontWeight: 500, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</th>
+                                    <th key={h} style={{ textAlign: "left", padding: "8px 12px", color: "var(--muted2)", fontWeight: 500, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>{h}</th>
                                 ))}
                             </tr>
                             </thead>
                             <tbody>
                             {data.recentPayments.map((p, i) => (
                                 <tr key={p.id} style={{ borderBottom: i < data.recentPayments.length - 1 ? "1px solid var(--border)" : "none" }}>
-                                    <td style={{ padding: "12px 12px" }}>
+                                    <td style={{ padding: "12px 12px", minWidth: 140 }}>
                                         <div style={{ fontWeight: 500, color: "var(--text)" }}>{p.memberName}</div>
                                         <div style={{ fontSize: 11, color: "var(--muted2)" }}>{p.memberEmail}</div>
                                     </td>
-                                    <td style={{ padding: "12px 12px", color: "var(--muted)" }}>{p.planName}</td>
-                                    <td style={{ padding: "12px 12px", fontFamily: "Barlow Condensed, sans-serif", fontWeight: 700, fontSize: 16, color: "var(--accent)" }}>{fmt(p.amount)}</td>
-                                    <td style={{ padding: "12px 12px", color: "var(--muted2)" }}>{formatDate(p.created_at)}</td>
+                                    <td style={{ padding: "12px 12px", color: "var(--muted)", whiteSpace: "nowrap" }}>{p.planName}</td>
+                                    <td style={{ padding: "12px 12px", fontFamily: "Barlow Condensed, sans-serif", fontWeight: 700, fontSize: 16, color: "var(--accent)", whiteSpace: "nowrap" }}>{fmt(p.amount)}</td>
+                                    <td style={{ padding: "12px 12px", color: "var(--muted2)", whiteSpace: "nowrap" }}>{formatDate(p.created_at)}</td>
                                 </tr>
                             ))}
                             </tbody>
