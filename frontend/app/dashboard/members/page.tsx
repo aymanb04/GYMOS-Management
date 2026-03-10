@@ -197,40 +197,43 @@ export default function MembersPage() {
             </div>
 
             {/* FILTERS */}
-            <div style={{ display: "flex", gap: 12, marginBottom: 24, alignItems: "center" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
                 <input
                     placeholder="Search name or email..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     style={{
-                        flex: 1, maxWidth: 320,
+                        width: "100%",
                         background: "var(--input-bg)", border: "1px solid var(--border)",
                         borderRadius: 8, padding: "10px 14px", fontSize: 14,
                         color: "var(--text)", outline: "none", fontFamily: "DM Sans, sans-serif",
                     }}
                 />
-                {(["all", "active", "inactive"] as const).map((f) => (
-                    <button key={f} onClick={() => setFilter(f)} style={{
-                        padding: "8px 16px", borderRadius: 8, fontSize: 12,
-                        letterSpacing: "0.08em", textTransform: "uppercase",
-                        cursor: "pointer", transition: "all .2s", fontFamily: "DM Sans, sans-serif",
-                        background: filter === f ? "var(--accent-subtle)" : "transparent",
-                        border: `1px solid ${filter === f ? "var(--accent-border)" : "var(--border)"}`,
-                        color: filter === f ? "var(--accent)" : "var(--muted2)",
-                    }}>
-                        {f}
-                    </button>
-                ))}
+                <div style={{ display: "flex", gap: 8 }}>
+                    {(["all", "active", "inactive"] as const).map((f) => (
+                        <button key={f} onClick={() => setFilter(f)} style={{
+                            padding: "8px 16px", borderRadius: 8, fontSize: 12,
+                            letterSpacing: "0.08em", textTransform: "uppercase",
+                            cursor: "pointer", transition: "all .2s", fontFamily: "DM Sans, sans-serif",
+                            background: filter === f ? "var(--accent-subtle)" : "transparent",
+                            border: `1px solid ${filter === f ? "var(--accent-border)" : "var(--border)"}`,
+                            color: filter === f ? "var(--accent)" : "var(--muted2)",
+                        }}>
+                            {f}
+                        </button>
+                    ))}
+                </div>
             </div>
 
             {/* TABLE */}
             <div className="member-table">
+                {/* Desktop header — hidden on mobile via CSS */}
                 <div style={{
                     display: "grid",
                     gridTemplateColumns: "1fr 200px 44px 160px 140px 100px",
                     gap: 12, padding: "12px 20px",
                     borderBottom: "1px solid var(--border)",
-                }}>
+                }} className="members-desktop-header">
                     {["Member", "Plan", "", "Expires", "Joined", "Status"].map((col, i) => (
                         <div key={i} className="mt-col">{col}</div>
                     ))}
@@ -246,85 +249,102 @@ export default function MembersPage() {
                         const expired = isExpired(member.membership_expires_at);
 
                         return (
-                            <div key={member.id} style={{
-                                display: "grid",
-                                gridTemplateColumns: "1fr 200px 44px 160px 140px 100px",
-                                gap: 12, padding: "14px 20px",
-                                borderBottom: "1px solid var(--border)",
-                                alignItems: "center", transition: "background .15s",
-                            }}
+                            <div key={member.id}
+                                 className="member-row"
                                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--card-hover)")}
                                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                             >
-                                {/* Name + email */}
-                                <div>
-                                    <div className="mt-name">{member.name}</div>
-                                    <div className="mt-email">{member.email}</div>
+                                {/* Desktop layout */}
+                                <div className="member-row-desktop" style={{
+                                    display: "grid",
+                                    gridTemplateColumns: "1fr 200px 44px 160px 140px 100px",
+                                    gap: 12, padding: "14px 20px",
+                                    alignItems: "center",
+                                }}>
+                                    <div>
+                                        <div className="mt-name">{member.name}</div>
+                                        <div className="mt-email">{member.email}</div>
+                                    </div>
+                                    <select
+                                        value={plan?.id ?? ""}
+                                        onChange={(e) => handleAssignPlan(member, e.target.value)}
+                                        style={{
+                                            background: "var(--input-bg)", border: "1px solid var(--border)",
+                                            borderRadius: 6, padding: "6px 10px",
+                                            fontSize: 12, color: plan ? "var(--text-dim)" : "var(--muted2)",
+                                            cursor: "pointer", outline: "none",
+                                            fontFamily: "DM Sans, sans-serif", width: "100%",
+                                        }}
+                                    >
+                                        <option value="">No plan</option>
+                                        {plans.map((p) => (
+                                            <option key={p.id} value={p.id}>{p.name} — €{p.price}/mo</option>
+                                        ))}
+                                    </select>
+                                    <button onClick={() => openCashModal(member)} title="Record cash payment" style={{
+                                        background: "var(--accent-subtle)", border: "1px solid var(--accent-border)",
+                                        borderRadius: 6, padding: "6px 8px", fontSize: 14, cursor: "pointer", lineHeight: 1,
+                                    }}>💵</button>
+                                    <div style={{ fontSize: 12, color: expired ? "var(--danger)" : "var(--muted2)" }}>
+                                        {formatDate(member.membership_expires_at)}
+                                        {expired && (
+                                            <span style={{ marginLeft: 6, fontSize: 10, background: "var(--danger-subtle)", color: "var(--danger)", border: "1px solid var(--danger-border)", borderRadius: 4, padding: "1px 5px" }}>expired</span>
+                                        )}
+                                    </div>
+                                    <div style={{ fontSize: 12, color: "var(--muted2)" }}>{formatDate(member.created_at)}</div>
+                                    <button
+                                        onClick={() => handleToggleStatus(member)}
+                                        className={`badge ${member.active ? "active" : "inactive"}`}
+                                        style={{ cursor: "pointer", border: "none", textAlign: "center" }}
+                                        title={member.active ? "Click to deactivate" : "Click to activate"}
+                                    >
+                                        {member.active ? "active" : "inactive"}
+                                    </button>
                                 </div>
 
-                                {/* Plan dropdown */}
-                                <select
-                                    value={plan?.id ?? ""}
-                                    onChange={(e) => handleAssignPlan(member, e.target.value)}
-                                    style={{
-                                        background: "var(--input-bg)",
-                                        border: "1px solid var(--border)",
-                                        borderRadius: 6, padding: "6px 10px",
-                                        fontSize: 12, color: plan ? "var(--text-dim)" : "var(--muted2)",
-                                        cursor: "pointer", outline: "none",
-                                        fontFamily: "DM Sans, sans-serif", width: "100%",
-                                    }}
-                                >
-                                    <option value="">No plan</option>
-                                    {plans.map((p) => (
-                                        <option key={p.id} value={p.id}>
-                                            {p.name} — €{p.price}/mo
-                                        </option>
-                                    ))}
-                                </select>
-
-                                {/* Cash payment button */}
-                                <button
-                                    onClick={() => openCashModal(member)}
-                                    title="Record cash payment"
-                                    style={{
-                                        background: "var(--accent-subtle)",
-                                        border: "1px solid var(--accent-border)",
-                                        borderRadius: 6, padding: "6px 8px",
-                                        fontSize: 14, cursor: "pointer",
-                                        lineHeight: 1,
-                                    }}
-                                >
-                                    💵
-                                </button>
-
-                                {/* Expiry */}
-                                <div style={{ fontSize: 12, color: expired ? "var(--danger)" : "var(--muted2)" }}>
-                                    {formatDate(member.membership_expires_at)}
-                                    {expired && (
-                                        <span style={{
-                                            marginLeft: 6, fontSize: 10,
-                                            background: "var(--danger-subtle)", color: "var(--danger)",
-                                            border: "1px solid var(--danger-border)",
-                                            borderRadius: 4, padding: "1px 5px",
-                                        }}>expired</span>
-                                    )}
+                                {/* Mobile layout */}
+                                <div className="member-row-mobile" style={{ padding: "14px 16px" }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                                        <div>
+                                            <div className="mt-name">{member.name}</div>
+                                            <div className="mt-email">{member.email}</div>
+                                        </div>
+                                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                            <button
+                                                onClick={() => handleToggleStatus(member)}
+                                                className={`badge ${member.active ? "active" : "inactive"}`}
+                                                style={{ cursor: "pointer", border: "none" }}
+                                            >
+                                                {member.active ? "active" : "inactive"}
+                                            </button>
+                                            <button onClick={() => openCashModal(member)} title="Record cash payment" style={{
+                                                background: "var(--accent-subtle)", border: "1px solid var(--accent-border)",
+                                                borderRadius: 6, padding: "4px 8px", fontSize: 14, cursor: "pointer", lineHeight: 1,
+                                            }}>💵</button>
+                                        </div>
+                                    </div>
+                                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                                        <select
+                                            value={plan?.id ?? ""}
+                                            onChange={(e) => handleAssignPlan(member, e.target.value)}
+                                            style={{
+                                                flex: 1, minWidth: 120,
+                                                background: "var(--input-bg)", border: "1px solid var(--border)",
+                                                borderRadius: 6, padding: "6px 10px",
+                                                fontSize: 12, color: plan ? "var(--text-dim)" : "var(--muted2)",
+                                                cursor: "pointer", outline: "none", fontFamily: "DM Sans, sans-serif",
+                                            }}
+                                        >
+                                            <option value="">No plan</option>
+                                            {plans.map((p) => (
+                                                <option key={p.id} value={p.id}>{p.name} — €{p.price}/mo</option>
+                                            ))}
+                                        </select>
+                                        <div style={{ fontSize: 12, color: expired ? "var(--danger)" : "var(--muted2)", whiteSpace: "nowrap" }}>
+                                            {expired ? "⚠ " : "⏱ "}{formatDate(member.membership_expires_at)}
+                                        </div>
+                                    </div>
                                 </div>
-
-                                {/* Joined */}
-                                <div style={{ fontSize: 12, color: "var(--muted2)" }}>
-                                    {formatDate(member.created_at)}
-                                </div>
-
-                                {/* Status toggle */}
-                                <button
-                                    onClick={() => handleToggleStatus(member)}
-                                    className={`badge ${member.active ? "active" : "inactive"}`}
-                                    style={{ cursor: "pointer", border: "none", textAlign: "center" }}
-                                    title={member.active ? "Click to deactivate" : "Click to activate"}
-                                >
-                                    {member.active ? "active" : "inactive"}
-                                </button>
                             </div>
                         );
                     })

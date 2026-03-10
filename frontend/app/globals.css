@@ -699,3 +699,20 @@ html, body {
         font-size: 36px;
     }
 }
+
+/* ── MEMBERS PAGE RESPONSIVE ─────────────────────────────────────────────── */
+.member-row {
+    border-bottom: 1px solid var(--border);
+    transition: background .15s;
+}
+.member-row:last-child { border-bottom: none; }
+
+.member-row-mobile  { display: none; }
+.member-row-desktop { display: grid; }
+.members-desktop-header { display: grid; }
+
+@media (max-width: 768px) {
+    .member-row-desktop    { display: none !important; }
+    .member-row-mobile     { display: block !important; }
+    .members-desktop-header { display: none !important; }
+}
