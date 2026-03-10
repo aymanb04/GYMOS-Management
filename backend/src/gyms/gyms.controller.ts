@@ -9,7 +9,7 @@ interface MulterFile {
 import {
     Controller, Get, Patch, Delete, Post,
     Param, Body, Req, UseGuards,
-    UseInterceptors, UploadedFile,
+    UseInterceptors, UploadedFile, Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtGuard } from '../auth/guards/jwt.guard';
@@ -19,8 +19,8 @@ import { GymsService } from './gyms.service';
 export class GymsController {
     constructor(private readonly gymsService: GymsService) {}
 
-    @Get('resolve/:subdomain')
-    resolveBySubdomain(@Param('subdomain') subdomain: string) {
+    @Get('resolve')
+    resolveBySubdomain(@Query('subdomain') subdomain: string) {
         return this.gymsService.resolveBySubdomain(subdomain);
     }
 
