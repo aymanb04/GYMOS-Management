@@ -1,3 +1,11 @@
+interface MulterFile {
+    fieldname: string;
+    originalname: string;
+    mimetype: string;
+    size: number;
+    buffer: Buffer;
+}
+
 import {
     Controller, Get, Patch, Delete, Post,
     Param, Body, Req, UseGuards,
@@ -32,7 +40,7 @@ export class GymsController {
     @UseInterceptors(FileInterceptor('logo'))
     uploadLogo(
         @Param('id') id: string,
-        @UploadedFile() file: Express.Multer.File,
+        @UploadedFile() file: MulterFile,
         @Req() req: any,
     ) {
         return this.gymsService.uploadLogo(id, req.user.id, file);
