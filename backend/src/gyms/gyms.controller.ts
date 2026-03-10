@@ -1,46 +1,50 @@
-import { Controller, Get, Patch, Param, Query, Body, Req, UseGuards } from '@nestjs/common';
-import { GymsService } from './gyms.service';
+import {
+    Controller, Get, Patch, Delete, Post,
+    Param, Body, Req, UseGuards,
+    UseInterceptors, UploadedFile,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtGuard } from '../auth/guards/jwt.guard';
+import { GymsService } from './gyms.service';
 
 @Controller('gyms')
 export class GymsController {
     constructor(private readonly gymsService: GymsService) {}
 
-    @Get()
-    findAll() {
-        return this.gymsService.findAll();
-    }
-
-    @Get('resolve')
-    resolve(@Query('subdomain') subdomain: string) {
+    @Get('resolve/:subdomain')
+    resolveBySubdomain(@Param('subdomain') subdomain: string) {
         return this.gymsService.resolveBySubdomain(subdomain);
     }
 
-    @Patch(':gymId')
     @UseGuards(JwtGuard)
-    updateGym(
-        @Param('gymId') gymId: string,
+    @Patch(':id')
+    update(
+        @Param('id') id: string,
         @Body() dto: { name?: string; brand_color?: string },
-        @Req() req: { token: string },
+        @Req() req: any,
     ) {
-        return this.gymsService.updateGym(gymId, dto, req.token);
+        return this.gymsService.update(id, req.user.id, dto);
     }
 
-    @Get(':gymId/stats')
+    // Logo upload — multipart/form-data, field name: "logo"
     @UseGuards(JwtGuard)
-    getStats(
-        @Param('gymId') gymId: string,
-        @Req() req: { token: string },
+    @Post(':id/logo')
+    @UseInterceptors(FileInterceptor('logo'))
+    uploadLogo(
+        @Param('id') id: string,
+        @UploadedFile() file: Express.Multer.File,
+        @Req() req: any,
     ) {
-        return this.gymsService.getStats(gymId, req.token);
+        return this.gymsService.uploadLogo(id, req.user.id, file);
     }
 
-    @Get(':gymId/members')
+    // Remove logo
     @UseGuards(JwtGuard)
-    getMembers(
-        @Param('gymId') gymId: string,
-        @Req() req: { token: string },
+    @Delete(':id/logo')
+    removeLogo(
+        @Param('id') id: string,
+        @Req() req: any,
     ) {
-        return this.gymsService.getMembers(gymId, req.token);
+        return this.gymsService.removeLogo(id, req.user.id);
     }
 }

@@ -13,17 +13,20 @@ export interface Gym {
     name: string;
     subdomain: string;
     brand_color: string;
+    logo_url: string | null;                          // ← toegevoegd
     features: Record<string, boolean> | null;
 }
 
 interface GymContextType {
     gym: Gym | null;
+    setGym: React.Dispatch<React.SetStateAction<Gym | null>>;  // ← toegevoegd
     gymLoading: boolean;
     gymError: string | null;
 }
 
 const GymContext = createContext<GymContextType>({
     gym: null,
+    setGym: () => {},                                 // ← toegevoegd
     gymLoading: true,
     gymError: null,
 });
@@ -39,8 +42,6 @@ function extractSubdomain(hostname: string): string | null {
     }
     return null;
 }
-
-const DEV_SUBDOMAIN = process.env.NODE_ENV === "development" ? "sga" : null;
 
 export function GymProvider({ children }: { children: ReactNode }) {
     const [gym, setGym]            = useState<Gym | null>(null);
@@ -94,7 +95,7 @@ export function GymProvider({ children }: { children: ReactNode }) {
     }
 
     return (
-        <GymContext.Provider value={{ gym, gymLoading, gymError }}>
+        <GymContext.Provider value={{ gym, setGym, gymLoading, gymError }}>
             {children}
         </GymContext.Provider>
     );
