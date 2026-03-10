@@ -61,17 +61,35 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             {/* SIDEBAR */}
             <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
-                {/* Logo image if available, else gym name text */}
+                {/* Logo + gym name */}
                 <div className="sb-logo">
-                    {gym?.logo_url ? (
-                        <img
-                            src={gym.logo_url}
-                            alt={gym.name}
-                            style={{ height: 32, width: "auto", maxWidth: "100%", objectFit: "contain" }}
-                        />
-                    ) : (
-                        gym?.name ?? "GymOS"
+                    {gym?.logo_url && (
+                        <div style={{
+                            background: "white",
+                            borderRadius: 8,
+                            padding: "5px 6px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flexShrink: 0,
+                        }}>
+                            <img
+                                src={gym.logo_url}
+                                alt={gym.name}
+                                style={{ height: 28, width: 28, objectFit: "contain", display: "block" }}
+                            />
+                        </div>
                     )}
+                    <span style={{
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: "white",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                    }}>
+                        {gym?.name ?? "GymOS"}
+                    </span>
                 </div>
 
                 <span className="sb-section">Main</span>
