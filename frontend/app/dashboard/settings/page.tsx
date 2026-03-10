@@ -151,7 +151,6 @@ function SettingsContent() {
             const { data } = await api.post<{ logo_url: string }>(
                 `/gyms/${gym.id}/logo`,
                 formData,
-                { headers: { "Content-Type": "multipart/form-data" } }
             );
             setLogoUrl(data.logo_url);
             setLogoPreview(null);
