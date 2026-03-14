@@ -1,0 +1,57 @@
+[33md48f301[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m import gym logo fix3.0 reset (logo for later)
+[33m155af09[m import gym logo fix3.0
+[33m13010c7[m import gym logo fix2.0
+[33m31ba3be[m import gym logo fix add MulterFile interface
+[33m3a14c4d[m import gym logo small fix
+[33m5102ca8[m import gym logo
+[33med79b18[m members page more mobile-responsive
+[33m99120b2[m making mobile-responsive (part1)
+[33m754dafe[m bookings member: no lag => added cache+update fetchClassDataForDay
+[33m164b8a2[m bookings: supabase fails join -> seperate fetch+map
+[33m379d36a[m bookings forgot in app.module
+[33m4cc2bfe[m bookings integrated
+[33m3e9dc82[m hide stripe feature if not chosen 3.0
+[33mca62667[m hide stripe feature if not chosen 2.0
+[33mb9f6241[m hide stripe feature if not chosen
+[33m5f8874a[m features: cash payments, revenue dashboard, stripe connect
+[33m0da3a97[m revenue page 'no data' fix3
+[33mb8ab7af[m revenue page 'no data' fix2
+[33mb934d73[m revenue page 'no data' fix
+[33m7cf83e3[m revenue page + features
+[33m673c02b[m fix 'member can't see plans' problem
+[33md5af94f[m Stripe wrap error fixed (other file)
+[33m158b662[m Stripe wrap error fixed
+[33m2c5e745[m integrated Stripe payment feature
+[33m4eda37d[m logout after change password (acc sesh error)
+[33m6554f77[m settings page, forgot s athe end...
+[33m2a7ecb8[m settings page
+[33m2c60d3e[m deleted hardcoded routes that intercepted classes, etc.
+[33ma8a7136[m modification to classes for fixed weekly schedule
+[33m3989ead[m fetch classes bug for member
+[33m0c3d416[m classes + member page
+[33m8f7ff32[m delete directory of reset password
+[33m61826ab[m UNIVERSAL forgot password feature
+[33m8000296[m forgot password button + avoid cross-gym login
+[33m1e4b8c7[m deactivated accounts can't log in
+[33meed1d43[m removing plans (if no members on it)
+[33md9e9aae[m add plans module, remove memberships
+[33m2750702[m finetuning admin dashboard (gymId -> subdomain)
+[33m71307d1[m added membership plans
+[33m2f76a06[m back to original color for sga
+[33m92a2f67[m trying new color for sga
+[33m802f3a4[m removed redirection from no sub -> sga
+[33m2dec8c4[m fix CORS for subdomains (recognizing subdomains)
+[33m7afb167[m fetch gym from subdomain, if no subdomain: go to localhost:3001
+[33m88940c1[m Fix empty backend directory
+[33m47c97e5[m member portal page (frontend) + fixed some auth bugs
+[33m8edc293[m add frontend and backend folders
+[33m1265aaa[m Merge remote-tracking branch 'origin/main'
+[33m7aec499[m .
+[33md763272[m Update hosting information in README
+[33m9996831[m Rename project from SGA to GYMOS Club Management
+[33m3da58db[m Made almost entire frontend + lot of changes in backend to be compatible. About to deploy to have live testing from other devices as well.
+[33m149bddd[m database-schema.sql template for gyms
+[33m680a4e5[m Refactor README formatting and license section
+[33m22bec0b[m Revise README with project details and features
+[33m001b5e7[m Revise README with detailed project overview
+[33m50682b8[m Initial commit

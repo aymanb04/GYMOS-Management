@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useGym } from "@/context/GymContext";
 import { useEffect, useState } from "react";
+import OfflineBanner from "@/components/OfflineBanner";
 
 const NAV = [
     { href: "/dashboard",          label: "Overview",  icon: "▦" },
@@ -44,6 +45,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     return (
         <div className="dash-root">
+            <OfflineBanner />
             {/* HAMBURGER — mobile only */}
             <button
                 className="sb-hamburger"
