@@ -44,14 +44,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     return (
         <div className="dash-root">
-            {/* HAMBURGER — mobile only, only visible when sidebar is closed */}
-            <button
-                className="sb-hamburger"
-                onClick={() => setSidebarOpen(true)}
-                aria-label="Open menu"
-            >
-                ☰
-            </button>
+            {/* TOPBAR — mobile only, sticky, scrolls with page */}
+            <div className="sb-topbar">
+                <button
+                    className="sb-hamburger"
+                    onClick={() => setSidebarOpen(s => !s)}
+                    aria-label="Toggle menu"
+                >
+                    {sidebarOpen ? "✕" : "☰"}
+                </button>
+            </div>
 
             {/* OVERLAY — mobile only */}
             <div
@@ -61,16 +63,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             {/* SIDEBAR */}
             <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
-
-                {/* Close button — mobile only, inside sidebar */}
-                <button
-                    className="sb-close"
-                    onClick={() => setSidebarOpen(false)}
-                    aria-label="Close menu"
-                >
-                    ✕
-                </button>
-
                 <div className="sb-logo">{gym?.name ?? "GymOS"}</div>
 
                 <span className="sb-section">Main</span>

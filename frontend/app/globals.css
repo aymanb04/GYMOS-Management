@@ -208,7 +208,7 @@ html, body {
     border: 1px solid var(--border);
     border-radius: 10px;
     padding: 14px 16px;
-    font-size: 16px;
+    font-size: 16px; /* ≥16px prevents iOS auto-zoom on focus */
     color: var(--text);
     font-family: 'DM Sans', sans-serif;
     outline: none;
@@ -345,7 +345,7 @@ html, body {
 .gym-card.selected .chk-mark { opacity: 1; }
 
 /* ── DASHBOARD ── */
-.dash-root { display: flex; min-height: 100vh; width: 100%; background: var(--bg); }
+.dash-root { display: flex; flex-direction: column; min-height: 100vh; width: 100%; background: var(--bg); }
 
 .sidebar {
     width: 220px; flex-shrink: 0;
@@ -538,6 +538,7 @@ html, body {
 .gym-card.selected .gym-check-mark { opacity: 1; }
 
 .spinner { width: 20px; height: 20px; border: 2px solid var(--border2); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+
 /* ── MISSING CLASS FIXES ─────────────────────────────────────────────────── */
 
 /* dashboard/page.tsx uses kpi-value, globals had kpi-val */
@@ -570,15 +571,24 @@ html, body {
     min-height: 100vh;
     background: var(--bg);
 }
+
 /* ── MOBILE RESPONSIVE ───────────────────────────────────────────────────── */
 
-/* Hamburger button — only visible on mobile */
+/* Topbar — sticky, scrolls with page, mobile only */
+.sb-topbar {
+    display: none;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    align-items: center;
+}
+
+/* Hamburger button — inside topbar */
 .sb-hamburger {
     display: none;
-    position: fixed;
-    top: 16px;
-    left: 16px;
-    z-index: 50;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -589,9 +599,10 @@ html, body {
     cursor: pointer;
     color: var(--text);
     font-size: 16px;
+    flex-shrink: 0;
 }
 
-/* Sidebar overlay — only on mobile */
+/* Sidebar overlay — mobile only */
 .sb-overlay {
     display: none;
     position: fixed;
@@ -601,6 +612,10 @@ html, body {
 }
 
 @media (max-width: 768px) {
+
+    /* Show topbar and hamburger */
+    .sb-topbar    { display: flex; }
+    .sb-hamburger { display: flex; }
 
     /* Auth split → single column */
     .split,
@@ -634,14 +649,10 @@ html, body {
         display: block;
     }
 
-    .sb-hamburger {
-        display: flex;
-    }
-
-    /* Main content — no left margin on mobile */
+    /* Main content — no left margin, topbar handles spacing */
     .dash-main {
         margin-left: 0 !important;
-        padding: 64px 16px 32px;
+        padding: 24px 16px 32px;
     }
 
     /* KPI grid — 1 column on mobile */
@@ -692,7 +703,7 @@ html, body {
 
 @media (max-width: 480px) {
     .dash-main {
-        padding: 60px 12px 24px;
+        padding: 16px 12px 24px;
     }
 
     .kpi-val,
@@ -713,25 +724,7 @@ html, body {
 .members-desktop-header { display: grid; }
 
 @media (max-width: 768px) {
-    .member-row-desktop    { display: none !important; }
-    .member-row-mobile     { display: block !important; }
+    .member-row-desktop     { display: none !important; }
+    .member-row-mobile      { display: block !important; }
     .members-desktop-header { display: none !important; }
-}
-
-.sb-close {
-    display: none;
-    background: none;
-    border: none;
-    color: var(--muted2);
-    font-size: 18px;
-    cursor: pointer;
-    align-self: flex-end;
-    margin-bottom: 16px;
-    padding: 4px;
-}
-
-@media (max-width: 768px) {
-    .sb-close {
-        display: block;
-    }
 }
