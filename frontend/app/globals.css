@@ -208,7 +208,7 @@ html, body {
     border: 1px solid var(--border);
     border-radius: 10px;
     padding: 14px 16px;
-    font-size: 14px;
+    font-size: 16px;
     color: var(--text);
     font-family: 'DM Sans', sans-serif;
     outline: none;
@@ -355,6 +355,7 @@ html, body {
     display: flex; flex-direction: column;
     position: fixed; top: 0; bottom: 0; left: 0;
     z-index: 10;
+    overflow-y: auto;
 }
 
 .sb-logo {

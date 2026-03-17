@@ -5,7 +5,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useGym } from "@/context/GymContext";
 import { useEffect, useState } from "react";
-import OfflineBanner from "@/components/OfflineBanner";
 
 const NAV = [
     { href: "/dashboard",          label: "Overview",  icon: "▦" },
@@ -45,14 +44,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     return (
         <div className="dash-root">
-            <OfflineBanner />
             {/* HAMBURGER — mobile only */}
             <button
                 className="sb-hamburger"
-                onClick={() => setSidebarOpen(true)}
-                aria-label="Open menu"
+                onClick={() => setSidebarOpen(s => !s)}
+                aria-label="Toggle menu"
             >
-                ☰
+                {sidebarOpen ? "✕" : "☰"}
             </button>
 
             {/* OVERLAY — mobile only */}
@@ -63,18 +61,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             {/* SIDEBAR */}
             <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
-                {/* Logo image if available, else gym name text */}
-                <div className="sb-logo">
-                    {gym?.logo_url ? (
-                        <img
-                            src={gym.logo_url}
-                            alt={gym.name}
-                            style={{ height: 32, width: "auto", maxWidth: "100%", objectFit: "contain" }}
-                        />
-                    ) : (
-                        gym?.name ?? "GymOS"
-                    )}
-                </div>
+                <div className="sb-logo">{gym?.name ?? "GymOS"}</div>
 
                 <span className="sb-section">Main</span>
 
