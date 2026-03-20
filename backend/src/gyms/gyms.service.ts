@@ -135,4 +135,122 @@ export class GymsService {
 
         return { logo_url: null };
     }
+
+    // Voeg deze twee methodes toe aan je gyms.service.ts
+// Zelfde patroon als de bestaande update() en uploadLogo() methodes
+
+// ── POPULAR CLASSES ──
+// Top lessen gerankt op aantal boekingen (laatste 30 dagen)
+    async getPopularClasses(gymId: string, userId: string) {
+        const db = this.supabase.getServiceClient();
+
+        const { data: user } = await db
+            .from('users')
+            .select('role, gym_id')
+            .eq('id', userId)
+            .single();
+
+        if (!user || user.role !== 'admin' || user.gym_id !== gymId) {
+            throw new ForbiddenException('Not allowed');
+        }
+
+        const since = new Date();
+        since.setDate(since.getDate() - 30);
+
+        const { data: reservations } = await db
+            .from('reservations')
+            .select(`
+            lesson_id,
+            lesson:lessons(title, day_of_week, time_of_day, instructor)
+        `)
+            .eq('gym_id', gymId)
+            .eq('status', 'booked')
+            .gte('created_at', since.toISOString());
+
+        if (!reservations) return [];
+
+        const map: Record<string, {
+            title: string;
+            day_of_week: number;
+            time_of_day: string;
+            instructor: string | null;
+            count: number;
+        }> = {};
+
+        for (const r of reservations) {
+            const lesson = r.lesson as any;
+            if (!r.lesson_id || !lesson) continue;
+            if (!map[r.lesson_id]) {
+                map[r.lesson_id] = {
+                    title: lesson.title,
+                    day_of_week: lesson.day_of_week,
+                    time_of_day: lesson.time_of_day,
+                    instructor: lesson.instructor ?? null,
+                    count: 0,
+                };
+            }
+            map[r.lesson_id].count += 1;
+        }
+
+        return Object.entries(map)
+            .map(([id, data]) => ({ id, ...data }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 5);
+    }
+
+// ── MEMBER ACTIVITY ──
+// Leden gerankt op aantal boekingen (laatste 30 dagen)
+// heavy = top 25%, light = bottom 25%, regular = midden
+    async getMemberActivity(gymId: string, userId: string) {
+        const db = this.supabase.getServiceClient();
+
+        const { data: user } = await db
+            .from('users')
+            .select('role, gym_id')
+            .eq('id', userId)
+            .single();
+
+        if (!user || user.role !== 'admin' || user.gym_id !== gymId) {
+            throw new ForbiddenException('Not allowed');
+        }
+
+        const since = new Date();
+        since.setDate(since.getDate() - 30);
+
+        const { data: reservations } = await db
+            .from('reservations')
+            .select(`
+            user_id,
+            user:users(name, email)
+        `)
+            .eq('gym_id', gymId)
+            .eq('status', 'booked')
+            .gte('created_at', since.toISOString());
+
+        if (!reservations) return [];
+
+        const map: Record<string, { name: string; email: string; count: number }> = {};
+
+        for (const r of reservations) {
+            const u = r.user as any;
+            if (!r.user_id || !u) continue;
+            if (!map[r.user_id]) {
+                map[r.user_id] = { name: u.name, email: u.email, count: 0 };
+            }
+            map[r.user_id].count += 1;
+        }
+
+        const sorted = Object.entries(map)
+            .map(([id, data]) => ({ id, ...data }))
+            .sort((a, b) => b.count - a.count);
+
+        const total = sorted.length;
+
+        return sorted.map((member, i) => ({
+            ...member,
+            label: i < Math.ceil(total * 0.25) ? 'heavy'
+                : i >= Math.floor(total * 0.75) ? 'light'
+                    : 'regular',
+        }));
+    }
 }

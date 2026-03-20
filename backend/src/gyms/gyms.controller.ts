@@ -55,4 +55,25 @@ export class GymsController {
     ) {
         return this.gymsService.removeLogo(id, req.user.id);
     }
+
+    // Voeg deze twee routes toe aan je gyms.controller.ts
+    // Zet ze samen met de andere @UseGuards(JwtAuthGuard) routes
+
+    @UseGuards(JwtGuard)
+    @Get(':id/popular-classes')
+    getPopularClasses(
+        @Param('id') id: string,
+        @Req() req: any,
+    ) {
+        return this.gymsService.getPopularClasses(id, req.user.id);
+    }
+
+    @UseGuards(JwtGuard)
+    @Get(':id/member-activity')
+    getMemberActivity(
+        @Param('id') id: string,
+        @Req() req: any,
+    ) {
+        return this.gymsService.getMemberActivity(id, req.user.id);
+    }
 }
