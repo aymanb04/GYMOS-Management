@@ -1,13 +1,11 @@
 import * as common from '@nestjs/common';
-import {Request} from 'express';
-import {StripeService} from './stripe.service';
-import {JwtGuard} from '../auth/guards/jwt.guard';
-
+import { Request } from 'express';
+import { StripeService } from './stripe.service';
+import { JwtGuard } from '../auth/guards/jwt.guard';
 
 @common.Controller('stripe')
 export class StripeController {
-    constructor(private readonly stripeService: StripeService) {
-    }
+    constructor(private readonly stripeService: StripeService) {}
 
     // Admin — start Connect onboarding
     @common.Post('connect/onboard')
@@ -26,7 +24,7 @@ export class StripeController {
         return this.stripeService.getConnectStatus(req.token);
     }
 
-    // Member — create checkout session to pay for a plan
+    // Member — create checkout session
     @common.Post('checkout')
     @common.UseGuards(JwtGuard)
     createCheckout(
@@ -39,6 +37,13 @@ export class StripeController {
             dto.successUrl,
             dto.cancelUrl,
         );
+    }
+
+    // Member — get own payment history
+    @common.Get('payments/my')
+    @common.UseGuards(JwtGuard)
+    getMyPayments(@common.Req() req: { token: string }) {
+        return this.stripeService.getMyPayments(req.token);
     }
 
     // Stripe webhook — no auth, verified by signature

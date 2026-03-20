@@ -40,7 +40,19 @@ interface Plan {
 
 interface ClassDateData {
     counts: Record<string, number>;
-    myBookings: Record<string, string>; // lessonId -> reservationId
+    myBookings: Record<string, string>;
+}
+
+interface Payment {
+    id: string;
+    amount: number;
+    status: string;
+    source: string;
+    paid_at: string;
+    period_start: string | null;
+    period_end: string | null;
+    plan_name: string;
+    duration_months: number | null;
 }
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -51,12 +63,16 @@ function formatDate(iso: string | null) {
     return new Date(iso).toLocaleDateString("nl-BE", { day: "numeric", month: "long", year: "numeric" });
 }
 
+function formatDateShort(iso: string | null) {
+    if (!iso) return "—";
+    return new Date(iso).toLocaleDateString("nl-BE", { day: "numeric", month: "short", year: "numeric" });
+}
+
 function daysUntil(iso: string | null): number | null {
     if (!iso) return null;
     return Math.ceil((new Date(iso).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 }
 
-// Get the next occurrence of a given day_of_week (0=Mon ... 6=Sun) from today
 function getNextDateForDay(dayIndex: number): string {
     const today = new Date();
     const todayIndex = today.getDay() === 0 ? 6 : today.getDay() - 1;
@@ -66,7 +82,7 @@ function getNextDateForDay(dayIndex: number): string {
     return target.toISOString().split("T")[0];
 }
 
-type Tab = "membership" | "classes";
+type Tab = "membership" | "classes" | "history";
 
 export default function MemberPage() {
     const { user, logout } = useAuth();
@@ -75,13 +91,14 @@ export default function MemberPage() {
     const [profile, setProfile]       = useState<MemberProfile | null>(null);
     const [classes, setClasses]       = useState<GymClass[]>([]);
     const [plans, setPlans]           = useState<Plan[]>([]);
+    const [payments, setPayments]     = useState<Payment[]>([]);
     const [loading, setLoading]       = useState(true);
     const [tab, setTab]               = useState<Tab>("membership");
     const [activeDay, setActiveDay]   = useState<number>(new Date().getDay() === 0 ? 6 : new Date().getDay() - 1);
     const [payLoading, setPayLoading] = useState<string | null>(null);
     const [showPlans, setShowPlans]   = useState(false);
+    const [historyLoaded, setHistoryLoaded] = useState(false);
 
-    const [classDateCache, setClassDateCache] = useState<Record<string, ClassDateData>>({});
     const [classDateData, setClassDateData]   = useState<ClassDateData>({ counts: {}, myBookings: {} });
     const [bookingLoading, setBookingLoading] = useState<string | null>(null);
     const [bookingError, setBookingError]     = useState<string | null>(null);
@@ -103,22 +120,25 @@ export default function MemberPage() {
             .finally(() => setLoading(false));
     }, []);
 
-    const fetchClassDataForDay = useCallback(async (dayIndex: number, forceRefresh = false) => {
-        const date = getNextDateForDay(dayIndex);
-
-        if (!forceRefresh && classDateCache[date]) {
-            setClassDateData(classDateCache[date]);
-            return;
+    // Lazy load payment history only when tab is opened
+    useEffect(() => {
+        if (tab === "history" && !historyLoaded) {
+            api.get<Payment[]>("/stripe/payments/my")
+                .then(res => setPayments(Array.isArray(res.data) ? res.data : []))
+                .catch(console.error)
+                .finally(() => setHistoryLoaded(true));
         }
+    }, [tab, historyLoaded]);
 
+    const fetchClassDataForDay = useCallback(async (dayIndex: number) => {
+        const date = getNextDateForDay(dayIndex);
         try {
             const res = await api.get<ClassDateData>(`/reservations/date/${date}`);
-            setClassDateCache((prev) => ({ ...prev, [date]: res.data }));
             setClassDateData(res.data);
         } catch {
             setClassDateData({ counts: {}, myBookings: {} });
         }
-    }, [classDateCache]);
+    }, []);
 
     useEffect(() => {
         if (tab === "classes") {
@@ -132,7 +152,7 @@ export default function MemberPage() {
         const date = getNextDateForDay(activeDay);
         try {
             await api.post("/reservations", { lessonId, date });
-            await fetchClassDataForDay(activeDay, true);
+            await fetchClassDataForDay(activeDay);
         } catch (err: any) {
             setBookingError(err?.response?.data?.message ?? "Could not book class.");
         } finally {
@@ -145,7 +165,7 @@ export default function MemberPage() {
         setBookingError(null);
         try {
             await api.delete(`/reservations/${reservationId}`);
-            await fetchClassDataForDay(activeDay, true);
+            await fetchClassDataForDay(activeDay);
         } catch (err: any) {
             setBookingError(err?.response?.data?.message ?? "Could not cancel booking.");
         } finally {
@@ -214,7 +234,7 @@ export default function MemberPage() {
                     <>
                         {/* TABS */}
                         <div style={{ display: "flex", gap: 4, marginBottom: 28, background: "var(--surface)", borderRadius: 10, padding: 4, border: "1px solid var(--border)", width: "fit-content" }}>
-                            {(["membership", "classes"] as Tab[]).map((t) => (
+                            {(["membership", "classes", "history"] as Tab[]).map((t) => (
                                 <button key={t} onClick={() => setTab(t)} style={{
                                     padding: "8px 20px", borderRadius: 7,
                                     background: tab === t ? "var(--accent)" : "transparent",
@@ -291,7 +311,7 @@ export default function MemberPage() {
                                         <div className="kpi-label" style={{ marginBottom: 16 }}>Choose a plan</div>
                                         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                                             {plans.map((plan) => (
-                                                <div key={plan.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 12 }}>
+                                                <div key={plan.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", background: "var(--input-bg)", border: "1px solid var(--border)", borderRadius: 12 }}>
                                                     <div>
                                                         <div style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 700, fontSize: 18, color: "var(--text)", textTransform: "uppercase" }}>{plan.name}</div>
                                                         <div style={{ fontSize: 13, color: "var(--muted)" }}>
@@ -324,7 +344,6 @@ export default function MemberPage() {
                         {/* CLASSES TAB */}
                         {tab === "classes" && (
                             <>
-                                {/* DAY SELECTOR */}
                                 <div style={{ display: "flex", gap: 4, marginBottom: 20, overflowX: "auto", paddingBottom: 4 }}>
                                     {DAYS_SHORT.map((day, i) => {
                                         const isToday = i === (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1);
@@ -392,21 +411,101 @@ export default function MemberPage() {
                                                     </div>
                                                     <div>
                                                         {isBooked ? (
-                                                            <button
-                                                                onClick={() => handleCancel(myReservationId, c.id)}
-                                                                disabled={isLoading}
-                                                                style={{ padding: "8px 16px", borderRadius: 8, background: "transparent", border: "1px solid var(--accent-border)", color: "var(--accent)", fontSize: 12, fontFamily: "DM Sans, sans-serif", cursor: "pointer", whiteSpace: "nowrap" }}
-                                                            >
+                                                            <button onClick={() => handleCancel(myReservationId, c.id)} disabled={isLoading}
+                                                                    style={{ padding: "8px 16px", borderRadius: 8, background: "transparent", border: "1px solid var(--accent-border)", color: "var(--accent)", fontSize: 12, fontFamily: "DM Sans, sans-serif", cursor: "pointer", whiteSpace: "nowrap" }}>
                                                                 {isLoading ? "..." : "✓ Booked · Cancel"}
                                                             </button>
                                                         ) : (
-                                                            <button
-                                                                onClick={() => handleBook(c.id)}
-                                                                disabled={isLoading || isFull}
-                                                                style={{ padding: "8px 16px", borderRadius: 8, background: isFull ? "transparent" : "var(--accent)", border: isFull ? "1px solid var(--border)" : "none", color: isFull ? "var(--muted2)" : "var(--bg)", fontSize: 12, fontFamily: "DM Sans, sans-serif", fontWeight: 600, cursor: isFull ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}
-                                                            >
+                                                            <button onClick={() => handleBook(c.id)} disabled={isLoading || isFull}
+                                                                    style={{ padding: "8px 16px", borderRadius: 8, background: isFull ? "transparent" : "var(--accent)", border: isFull ? "1px solid var(--border)" : "none", color: isFull ? "var(--muted2)" : "var(--bg)", fontSize: 12, fontFamily: "DM Sans, sans-serif", fontWeight: 600, cursor: isFull ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}>
                                                                 {isLoading ? "..." : isFull ? "Full" : "Book →"}
                                                             </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </>
+                        )}
+
+                        {/* HISTORY TAB */}
+                        {tab === "history" && (
+                            <>
+                                <div style={{ marginBottom: 20 }}>
+                                    <span style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 700, fontSize: 20, color: "var(--text)", textTransform: "uppercase" }}>Payment history</span>
+                                </div>
+
+                                {!historyLoaded ? (
+                                    <div style={{ display: "flex", justifyContent: "center", padding: 40 }}>
+                                        <div className="spinner" />
+                                    </div>
+                                ) : payments.length === 0 ? (
+                                    <div style={{ textAlign: "center", padding: "48px 20px", color: "var(--muted2)", fontSize: 14, background: "var(--surface)", borderRadius: 14, border: "1px solid var(--border)" }}>
+                                        No payments yet.
+                                    </div>
+                                ) : (
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                                        {payments.map((p) => {
+                                            const isPaid = p.status === "paid";
+                                            const isPending = p.status === "pending";
+
+                                            return (
+                                                <div key={p.id} style={{
+                                                    background: "var(--surface)",
+                                                    border: `1px solid ${isPaid ? "var(--border)" : isPending ? "rgba(255,180,0,0.2)" : "var(--danger-border)"}`,
+                                                    borderRadius: 14,
+                                                    padding: "18px 20px",
+                                                }}>
+                                                    {/* Top row: plan name + amount */}
+                                                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
+                                                        <div>
+                                                            <div style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 700, fontSize: 18, color: "var(--text)", textTransform: "uppercase", marginBottom: 2 }}>
+                                                                {p.plan_name}
+                                                            </div>
+                                                            <div style={{ fontSize: 12, color: "var(--muted)", display: "flex", gap: 8, alignItems: "center" }}>
+                                                                <span style={{
+                                                                    padding: "2px 8px", borderRadius: 4, fontSize: 10,
+                                                                    fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em",
+                                                                    background: isPaid ? "var(--accent-subtle)" : isPending ? "rgba(255,180,0,0.08)" : "var(--danger-subtle)",
+                                                                    color: isPaid ? "var(--accent)" : isPending ? "#FFB400" : "var(--danger)",
+                                                                    border: `1px solid ${isPaid ? "var(--accent-border)" : isPending ? "rgba(255,180,0,0.2)" : "var(--danger-border)"}`,
+                                                                }}>
+                                                                    {p.status}
+                                                                </span>
+                                                                <span style={{ textTransform: "capitalize" }}>{p.source}</span>
+                                                            </div>
+                                                        </div>
+                                                        <div style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 700, fontSize: 24, color: isPaid ? "var(--accent)" : "var(--muted)" }}>
+                                                            €{Number(p.amount).toFixed(2)}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Bottom row: dates */}
+                                                    <div style={{
+                                                        display: "grid",
+                                                        gridTemplateColumns: p.period_start ? "1fr 1fr 1fr" : "1fr",
+                                                        gap: 12,
+                                                        borderTop: "1px solid var(--border)",
+                                                        paddingTop: 12,
+                                                        marginTop: 4,
+                                                    }}>
+                                                        <div>
+                                                            <div style={{ fontSize: 9, letterSpacing: "0.15em", textTransform: "uppercase", color: "var(--muted2)", marginBottom: 3 }}>Paid on</div>
+                                                            <div style={{ fontSize: 13, color: "var(--text-dim)" }}>{formatDateShort(p.paid_at)}</div>
+                                                        </div>
+                                                        {p.period_start && (
+                                                            <div>
+                                                                <div style={{ fontSize: 9, letterSpacing: "0.15em", textTransform: "uppercase", color: "var(--muted2)", marginBottom: 3 }}>Period start</div>
+                                                                <div style={{ fontSize: 13, color: "var(--text-dim)" }}>{formatDateShort(p.period_start)}</div>
+                                                            </div>
+                                                        )}
+                                                        {p.period_end && (
+                                                            <div>
+                                                                <div style={{ fontSize: 9, letterSpacing: "0.15em", textTransform: "uppercase", color: "var(--muted2)", marginBottom: 3 }}>Period end</div>
+                                                                <div style={{ fontSize: 13, color: "var(--text-dim)" }}>{formatDateShort(p.period_end)}</div>
+                                                            </div>
                                                         )}
                                                     </div>
                                                 </div>

@@ -244,21 +244,21 @@ export class MembersService {
     }
 
     // Record a cash payment and activate membership
+    // In members.service.ts — replace only the recordCashPayment method with this:
+
     async recordCashPayment(memberId: string, planId: string, jwt: string) {
         const gymId = await this.getAdminGymId(jwt);
         const client = this.supabase.getServiceClient();
 
-        // Verify member belongs to this gym
         const { data: member } = await client
             .from('users')
-            .select('id, gym_id')
+            .select('id, gym_id, membership_expires_at')
             .eq('id', memberId)
             .eq('gym_id', gymId)
             .single();
 
         if (!member) throw new NotFoundException('Member not found');
 
-        // Get plan details
         const { data: plan } = await client
             .from('membership_plans')
             .select('id, name, price, duration_months')
@@ -268,22 +268,26 @@ export class MembersService {
 
         if (!plan) throw new NotFoundException('Plan not found');
 
-        // Set membership expiry
-        const expiry = new Date();
-        expiry.setMonth(expiry.getMonth() + plan.duration_months);
+        // Period starts after current membership ends (or now) — same logic as Stripe
+        const periodStart = member.membership_expires_at && new Date(member.membership_expires_at) > new Date()
+            ? new Date(member.membership_expires_at)
+            : new Date();
 
-        // Update member's membership
+        const periodEnd = new Date(periodStart);
+        periodEnd.setMonth(periodEnd.getMonth() + plan.duration_months);
+
+        // Update member's membership to period_end
         await client
             .from('users')
             .update({
                 membership_plan_id: planId,
-                membership_expires_at: expiry.toISOString(),
+                membership_expires_at: periodEnd.toISOString(),
                 active: true,
             })
             .eq('id', memberId)
             .eq('gym_id', gymId);
 
-        // Record cash payment
+        // Record cash payment with period
         const { error: paymentError } = await client
             .from('payments')
             .insert({
@@ -293,13 +297,15 @@ export class MembersService {
                 status: 'paid',
                 source: 'cash',
                 membership_plan_id: planId,
+                period_start: periodStart.toISOString(),
+                period_end: periodEnd.toISOString(),
             });
 
         if (paymentError) throw new Error(paymentError.message);
 
         return {
             message: 'Cash payment recorded and membership activated',
-            expires_at: expiry.toISOString(),
+            expires_at: periodEnd.toISOString(),
             plan_name: plan.name,
             amount: plan.price,
         };

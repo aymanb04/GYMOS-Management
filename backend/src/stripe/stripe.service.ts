@@ -24,7 +24,7 @@ export class StripeService {
 
         const { data: profile } = await this.supabase.getServiceClient()
             .from('users')
-            .select('id, gym_id, role, name, email, stripe_customer_id')
+            .select('id, gym_id, role, name, email, stripe_customer_id, membership_expires_at')
             .eq('id', authData.user.id)
             .single();
 
@@ -33,7 +33,6 @@ export class StripeService {
     }
 
     // ── CONNECT ONBOARDING ──
-    // Admin connects their gym's Stripe account
     async createConnectOnboardingLink(jwt: string, returnUrl: string) {
         const profile = await this.getUserProfile(jwt);
         if (profile.role !== 'admin') throw new ForbiddenException('Admins only');
@@ -48,7 +47,6 @@ export class StripeService {
 
         let accountId = gym.stripe_account_id;
 
-        // Create a new Connect account if none exists
         if (!accountId) {
             const account = await this.stripe.accounts.create({
                 type: 'express',
@@ -56,9 +54,7 @@ export class StripeService {
                     card_payments: { requested: true },
                     transfers: { requested: true },
                 },
-                business_profile: {
-                    name: gym.name,
-                },
+                business_profile: { name: gym.name },
             });
 
             accountId = account.id;
@@ -69,7 +65,6 @@ export class StripeService {
                 .eq('id', gym.id);
         }
 
-        // Create onboarding link
         const accountLink = await this.stripe.accountLinks.create({
             account: accountId,
             refresh_url: `${returnUrl}?stripe=refresh`,
@@ -80,7 +75,7 @@ export class StripeService {
         return { url: accountLink.url };
     }
 
-    // Check if gym's Stripe account is fully connected
+    // ── CONNECT STATUS ──
     async getConnectStatus(jwt: string) {
         const profile = await this.getUserProfile(jwt);
         if (profile.role !== 'admin') throw new ForbiddenException('Admins only');
@@ -109,13 +104,10 @@ export class StripeService {
     }
 
     // ── CHECKOUT ──
-    // Member pays for a membership plan
     async createCheckoutSession(planId: string, jwt: string, successUrl: string, cancelUrl: string) {
         const profile = await this.getUserProfile(jwt);
-
         const serviceClient = this.supabase.getServiceClient();
 
-        // Get plan details
         const { data: plan } = await serviceClient
             .from('membership_plans')
             .select('id, name, price, duration_months, gym_id')
@@ -125,7 +117,6 @@ export class StripeService {
 
         if (!plan) throw new BadRequestException('Plan not found');
 
-        // Get gym's Stripe account
         const { data: gym } = await serviceClient
             .from('gyms')
             .select('stripe_account_id, name')
@@ -136,26 +127,30 @@ export class StripeService {
             throw new BadRequestException('This gym has not connected their payment account yet.');
         }
 
-        // Get or create Stripe customer
         let customerId = profile.stripe_customer_id;
         if (!customerId) {
-            const customer = await this.stripe.customers.create({
-                email: profile.email,
-                name: profile.name,
-            }, { stripeAccount: gym.stripe_account_id });
-
+            const customer = await this.stripe.customers.create(
+                { email: profile.email, name: profile.name },
+                { stripeAccount: gym.stripe_account_id },
+            );
             customerId = customer.id;
-
             await serviceClient
                 .from('users')
                 .update({ stripe_customer_id: customerId })
                 .eq('id', profile.id);
         }
 
+        // Calculate period: starts after current membership ends (or now)
+        const periodStart = profile.membership_expires_at && new Date(profile.membership_expires_at) > new Date()
+            ? new Date(profile.membership_expires_at)
+            : new Date();
+
+        const periodEnd = new Date(periodStart);
+        periodEnd.setMonth(periodEnd.getMonth() + plan.duration_months);
+
         const amountCents = Math.round(Number(plan.price) * 100);
         const platformFeeCents = Math.round(amountCents * (Number(process.env.PLATFORM_FEE_PERCENT ?? 1) / 100));
 
-        // Create checkout session on the gym's connected account
         const session = await this.stripe.checkout.sessions.create({
             mode: 'payment',
             payment_method_types: ['card'],
@@ -182,10 +177,12 @@ export class StripeService {
                 plan_id: planId,
                 gym_id: profile.gym_id,
                 duration_months: String(plan.duration_months),
+                period_start: periodStart.toISOString(),
+                period_end: periodEnd.toISOString(),
             },
         }, { stripeAccount: gym.stripe_account_id });
 
-        // Create a pending payment record
+        // Create pending payment record with period already known
         await serviceClient
             .from('payments')
             .insert({
@@ -194,14 +191,15 @@ export class StripeService {
                 amount: plan.price,
                 status: 'pending',
                 stripe_session_id: session.id,
-                membership_plan_id: planId,  // ← voeg dit toe
+                membership_plan_id: planId,
+                period_start: periodStart.toISOString(),
+                period_end: periodEnd.toISOString(),
             });
 
         return { url: session.url, sessionId: session.id };
     }
 
     // ── WEBHOOK ──
-    // Called by Stripe when payment completes
     async handleWebhook(payload: Buffer, signature: string, stripeAccountId: string) {
         let event: Stripe.Event;
 
@@ -224,44 +222,83 @@ export class StripeService {
     }
 
     private async handlePaymentSuccess(session: Stripe.Checkout.Session, stripeAccountId: string) {
-        const { user_id, plan_id, gym_id, duration_months } = session.metadata ?? {};
+        const { user_id, plan_id, gym_id, duration_months, period_start, period_end } = session.metadata ?? {};
         if (!user_id || !plan_id || !gym_id) return;
 
         const serviceClient = this.supabase.getServiceClient();
 
-        // Update payment record to paid
+        // Update payment to paid, include period if not already set
         await serviceClient
             .from('payments')
             .update({
                 status: 'paid',
                 stripe_session_id: session.id,
                 stripe_payment_intent_id: String(session.payment_intent ?? ''),
+                ...(period_start ? { period_start } : {}),
+                ...(period_end   ? { period_end }   : {}),
             })
             .eq('stripe_session_id', session.id);
 
-        // Set membership expiry
+        // Set membership expiry based on period_end from metadata
         const months = Number(duration_months ?? 1);
-        const { data: currentUser } = await serviceClient
-            .from('users')
-            .select('membership_expires_at')
-            .eq('id', user_id)
-            .single();
 
-        const baseDate = currentUser?.membership_expires_at && new Date(currentUser.membership_expires_at) > new Date()
-            ? new Date(currentUser.membership_expires_at)
-            : new Date();
+        let expiryDate: Date;
+        if (period_end) {
+            // Use the period_end calculated at checkout time (handles pre-payments correctly)
+            expiryDate = new Date(period_end);
+        } else {
+            // Fallback: extend from current expiry or now
+            const { data: currentUser } = await serviceClient
+                .from('users')
+                .select('membership_expires_at')
+                .eq('id', user_id)
+                .single();
 
-        const expiry = new Date(baseDate);
-        expiry.setMonth(expiry.getMonth() + months);
+            const baseDate = currentUser?.membership_expires_at && new Date(currentUser.membership_expires_at) > new Date()
+                ? new Date(currentUser.membership_expires_at)
+                : new Date();
+
+            expiryDate = new Date(baseDate);
+            expiryDate.setMonth(expiryDate.getMonth() + months);
+        }
 
         await serviceClient
             .from('users')
             .update({
                 membership_plan_id: plan_id,
-                membership_expires_at: expiry.toISOString(),
+                membership_expires_at: expiryDate.toISOString(),
                 active: true,
             })
             .eq('id', user_id)
             .eq('gym_id', gym_id);
+    }
+
+    // ── MEMBER PAYMENT HISTORY ──
+    async getMyPayments(jwt: string) {
+        const profile = await this.getUserProfile(jwt);
+        const serviceClient = this.supabase.getServiceClient();
+
+        const { data: payments } = await serviceClient
+            .from('payments')
+            .select(`
+                id, amount, status, source, created_at,
+                period_start, period_end,
+                plan:membership_plans(name, duration_months)
+            `)
+            .eq('user_id', profile.id)
+            .eq('gym_id', profile.gym_id)
+            .order('created_at', { ascending: false });
+
+        return (payments ?? []).map(p => ({
+            id: p.id,
+            amount: p.amount,
+            status: p.status,
+            source: p.source,
+            paid_at: p.created_at,
+            period_start: p.period_start,
+            period_end: p.period_end,
+            plan_name: (p.plan as any)?.name ?? '—',
+            duration_months: (p.plan as any)?.duration_months ?? null,
+        }));
     }
 }
