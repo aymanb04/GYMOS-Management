@@ -25,6 +25,15 @@ export class ReservationsService {
         return profile;
     }
 
+    // Timezone-safe local date string (YYYY-MM-DD)
+    private getLocalToday(): string {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const d = String(now.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+
     // Member books a spot in a class for a specific date
     async book(lessonId: string, reservedDate: string, jwt: string) {
         const profile = await this.getUserProfile(jwt);
@@ -40,13 +49,13 @@ export class ReservationsService {
 
         if (!lesson) throw new NotFoundException('Class not found');
 
-        // Check date not in past
-        const today = new Date().toISOString().split('T')[0];
+        // Check date not in past (timezone-safe)
+        const today = this.getLocalToday();
         if (reservedDate < today) {
             throw new BadRequestException('Cannot book a class in the past.');
         }
 
-        // Check for duplicate booking
+        // Check for duplicate active booking
         const { data: existing } = await service
             .from('reservations')
             .select('id')
@@ -72,6 +81,30 @@ export class ReservationsService {
             }
         }
 
+        // Check if there's a cancelled reservation for this combination
+        // (reactivate instead of inserting to avoid unique constraint violation)
+        const { data: cancelled } = await service
+            .from('reservations')
+            .select('id')
+            .eq('lesson_id', lessonId)
+            .eq('user_id', profile.id)
+            .eq('reserved_date', reservedDate)
+            .eq('status', 'cancelled')
+            .maybeSingle();
+
+        if (cancelled) {
+            const { data, error } = await service
+                .from('reservations')
+                .update({ status: 'booked' })
+                .eq('id', cancelled.id)
+                .select()
+                .single();
+
+            if (error) throw new Error(error.message);
+            return data;
+        }
+
+        // New booking
         const { data, error } = await service
             .from('reservations')
             .insert({
@@ -121,7 +154,7 @@ export class ReservationsService {
     // Member gets their upcoming bookings
     async getMyBookings(jwt: string) {
         const profile = await this.getUserProfile(jwt);
-        const today = new Date().toISOString().split('T')[0];
+        const today = this.getLocalToday();
 
         const { data, error } = await this.supabase.getServiceClient()
             .from('reservations')
