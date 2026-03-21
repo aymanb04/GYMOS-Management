@@ -73,13 +73,33 @@ function daysUntil(iso: string | null): number | null {
     return Math.ceil((new Date(iso).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 }
 
-function getNextDateForDay(dayIndex: number): string {
-    const today = new Date();
-    const todayIndex = today.getDay() === 0 ? 6 : today.getDay() - 1;
-    const diff = (dayIndex - todayIndex + 7) % 7;
-    const target = new Date(today);
-    target.setDate(today.getDate() + diff);
-    return target.toISOString().split("T")[0];
+// Get local today as YYYY-MM-DD (Brussels timezone)
+function getLocalToday(): string {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Brussels" }).format(new Date());
+}
+
+// Get local today's day index (0=Mon ... 6=Sun)
+function getLocalTodayIndex(): number {
+    const d = new Date().toLocaleDateString("en-US", { timeZone: "Europe/Brussels", weekday: "short" });
+    const map: Record<string, number> = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
+    return map[d] ?? 0;
+}
+
+// Get date for a given day index + week offset (0=this week, 1=next week)
+function getDateForDay(dayIndex: number, weekOffset: number): string {
+    const todayIndex = getLocalTodayIndex();
+    // Start of this week (Monday)
+    const now = new Date();
+    const localToday = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Brussels" }).format(now);
+    const [y, m, d] = localToday.split("-").map(Number);
+    const monday = new Date(y, m - 1, d - todayIndex);
+    // Target date = monday + dayIndex + weekOffset * 7
+    const target = new Date(monday);
+    target.setDate(monday.getDate() + dayIndex + weekOffset * 7);
+    const ty = target.getFullYear();
+    const tm = String(target.getMonth() + 1).padStart(2, "0");
+    const td = String(target.getDate()).padStart(2, "0");
+    return `${ty}-${tm}-${td}`;
 }
 
 type Tab = "membership" | "classes" | "history";
@@ -94,7 +114,8 @@ export default function MemberPage() {
     const [payments, setPayments]     = useState<Payment[]>([]);
     const [loading, setLoading]       = useState(true);
     const [tab, setTab]               = useState<Tab>("membership");
-    const [activeDay, setActiveDay]   = useState<number>(new Date().getDay() === 0 ? 6 : new Date().getDay() - 1);
+    const [activeDay, setActiveDay]   = useState<number>(getLocalTodayIndex());
+    const [weekOffset, setWeekOffset] = useState<number>(0);
     const [payLoading, setPayLoading] = useState<string | null>(null);
     const [showPlans, setShowPlans]   = useState(false);
     const [historyLoaded, setHistoryLoaded] = useState(false);
@@ -104,6 +125,8 @@ export default function MemberPage() {
     const [bookingError, setBookingError]     = useState<string | null>(null);
 
     const stripeEnabled = !!gym?.features?.stripe_payments;
+    const todayIndex = getLocalTodayIndex();
+    const today = getLocalToday();
 
     useEffect(() => {
         Promise.all([
@@ -120,7 +143,6 @@ export default function MemberPage() {
             .finally(() => setLoading(false));
     }, []);
 
-    // Lazy load payment history only when tab is opened
     useEffect(() => {
         if (tab === "history" && !historyLoaded) {
             api.get<Payment[]>("/stripe/payments/my")
@@ -130,8 +152,8 @@ export default function MemberPage() {
         }
     }, [tab, historyLoaded]);
 
-    const fetchClassDataForDay = useCallback(async (dayIndex: number) => {
-        const date = getNextDateForDay(dayIndex);
+    const fetchClassDataForDay = useCallback(async (dayIndex: number, offset: number) => {
+        const date = getDateForDay(dayIndex, offset);
         try {
             const res = await api.get<ClassDateData>(`/reservations/date/${date}`);
             setClassDateData(res.data);
@@ -142,17 +164,17 @@ export default function MemberPage() {
 
     useEffect(() => {
         if (tab === "classes") {
-            fetchClassDataForDay(activeDay);
+            fetchClassDataForDay(activeDay, weekOffset);
         }
-    }, [tab, activeDay, fetchClassDataForDay]);
+    }, [tab, activeDay, weekOffset, fetchClassDataForDay]);
 
     const handleBook = async (lessonId: string) => {
         setBookingLoading(lessonId);
         setBookingError(null);
-        const date = getNextDateForDay(activeDay);
+        const date = getDateForDay(activeDay, weekOffset);
         try {
             await api.post("/reservations", { lessonId, date });
-            await fetchClassDataForDay(activeDay);
+            await fetchClassDataForDay(activeDay, weekOffset);
         } catch (err: any) {
             setBookingError(err?.response?.data?.message ?? "Could not book class.");
         } finally {
@@ -165,7 +187,7 @@ export default function MemberPage() {
         setBookingError(null);
         try {
             await api.delete(`/reservations/${reservationId}`);
-            await fetchClassDataForDay(activeDay);
+            await fetchClassDataForDay(activeDay, weekOffset);
         } catch (err: any) {
             setBookingError(err?.response?.data?.message ?? "Could not cancel booking.");
         } finally {
@@ -344,30 +366,69 @@ export default function MemberPage() {
                         {/* CLASSES TAB */}
                         {tab === "classes" && (
                             <>
+                                {/* Week toggle */}
+                                <div style={{ display: "flex", gap: 6, marginBottom: 16, alignItems: "center" }}>
+                                    <button
+                                        onClick={() => { setWeekOffset(0); setActiveDay(todayIndex); }}
+                                        style={{
+                                            padding: "6px 14px", borderRadius: 8, fontSize: 12,
+                                            background: weekOffset === 0 ? "var(--accent)" : "var(--surface)",
+                                            color: weekOffset === 0 ? "var(--bg)" : "var(--muted)",
+                                            border: `1px solid ${weekOffset === 0 ? "var(--accent)" : "var(--border)"}`,
+                                            cursor: "pointer", fontFamily: "DM Sans, sans-serif", fontWeight: 600,
+                                        }}
+                                    >
+                                        This week
+                                    </button>
+                                    <button
+                                        onClick={() => { setWeekOffset(1); }}
+                                        style={{
+                                            padding: "6px 14px", borderRadius: 8, fontSize: 12,
+                                            background: weekOffset === 1 ? "var(--accent)" : "var(--surface)",
+                                            color: weekOffset === 1 ? "var(--bg)" : "var(--muted)",
+                                            border: `1px solid ${weekOffset === 1 ? "var(--accent)" : "var(--border)"}`,
+                                            cursor: "pointer", fontFamily: "DM Sans, sans-serif", fontWeight: 600,
+                                        }}
+                                    >
+                                        Next week
+                                    </button>
+                                </div>
+
+                                {/* Day selector */}
                                 <div style={{ display: "flex", gap: 4, marginBottom: 20, overflowX: "auto", paddingBottom: 4 }}>
                                     {DAYS_SHORT.map((day, i) => {
-                                        const isToday = i === (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1);
+                                        const isToday = weekOffset === 0 && i === todayIndex;
+                                        const isPast = weekOffset === 0 && i < todayIndex;
                                         return (
-                                            <button key={i} onClick={() => setActiveDay(i)} style={{
-                                                padding: "8px 14px", borderRadius: 8, whiteSpace: "nowrap",
-                                                background: activeDay === i ? "var(--accent)" : "var(--surface)",
-                                                border: `1px solid ${activeDay === i ? "var(--accent)" : isToday ? "var(--accent-border)" : "var(--border)"}`,
-                                                color: activeDay === i ? "var(--bg)" : "var(--muted)",
-                                                fontSize: 13, cursor: "pointer", fontFamily: "DM Sans, sans-serif",
-                                                fontWeight: isToday ? 600 : 400,
-                                            }}>
+                                            <button
+                                                key={i}
+                                                onClick={() => !isPast && setActiveDay(i)}
+                                                disabled={isPast}
+                                                style={{
+                                                    padding: "8px 14px", borderRadius: 8, whiteSpace: "nowrap",
+                                                    background: activeDay === i ? "var(--accent)" : "var(--surface)",
+                                                    border: `1px solid ${activeDay === i ? "var(--accent)" : isToday ? "var(--accent-border)" : "var(--border)"}`,
+                                                    color: activeDay === i ? "var(--bg)" : isPast ? "var(--muted2)" : "var(--muted)",
+                                                    opacity: isPast ? 0.35 : 1,
+                                                    fontSize: 13,
+                                                    cursor: isPast ? "not-allowed" : "pointer",
+                                                    fontFamily: "DM Sans, sans-serif",
+                                                    fontWeight: isToday ? 600 : 400,
+                                                }}
+                                            >
                                                 {day}{isToday && activeDay !== i && <span style={{ marginLeft: 4, fontSize: 10, color: "var(--accent)" }}>•</span>}
                                             </button>
                                         );
                                     })}
                                 </div>
 
+                                {/* Day header */}
                                 <div style={{ marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                                     <div>
                                         <span style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 700, fontSize: 20, color: "var(--text)", textTransform: "uppercase" }}>{DAYS[activeDay]}</span>
                                         <span style={{ fontSize: 13, color: "var(--muted2)", marginLeft: 10 }}>{classesByDay[activeDay].length} class{classesByDay[activeDay].length !== 1 ? "es" : ""}</span>
                                     </div>
-                                    <span style={{ fontSize: 12, color: "var(--muted2)" }}>{getNextDateForDay(activeDay)}</span>
+                                    <span style={{ fontSize: 12, color: "var(--muted2)" }}>{getDateForDay(activeDay, weekOffset)}</span>
                                 </div>
 
                                 {bookingError && (
@@ -387,7 +448,7 @@ export default function MemberPage() {
                                             const myReservationId = classDateData.myBookings[c.id];
                                             const isBooked = !!myReservationId;
                                             const isFull = c.capacity_enforced && bookedCount >= c.capacity;
-                                            const isLoading = bookingLoading === c.id;
+                                            const isLoadingClass = bookingLoading === c.id;
 
                                             return (
                                                 <div key={c.id} style={{
@@ -411,14 +472,14 @@ export default function MemberPage() {
                                                     </div>
                                                     <div>
                                                         {isBooked ? (
-                                                            <button onClick={() => handleCancel(myReservationId, c.id)} disabled={isLoading}
+                                                            <button onClick={() => handleCancel(myReservationId, c.id)} disabled={isLoadingClass}
                                                                     style={{ padding: "8px 16px", borderRadius: 8, background: "transparent", border: "1px solid var(--accent-border)", color: "var(--accent)", fontSize: 12, fontFamily: "DM Sans, sans-serif", cursor: "pointer", whiteSpace: "nowrap" }}>
-                                                                {isLoading ? "..." : "✓ Booked · Cancel"}
+                                                                {isLoadingClass ? "..." : "✓ Booked · Cancel"}
                                                             </button>
                                                         ) : (
-                                                            <button onClick={() => handleBook(c.id)} disabled={isLoading || isFull}
+                                                            <button onClick={() => handleBook(c.id)} disabled={isLoadingClass || isFull}
                                                                     style={{ padding: "8px 16px", borderRadius: 8, background: isFull ? "transparent" : "var(--accent)", border: isFull ? "1px solid var(--border)" : "none", color: isFull ? "var(--muted2)" : "var(--bg)", fontSize: 12, fontFamily: "DM Sans, sans-serif", fontWeight: 600, cursor: isFull ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}>
-                                                                {isLoading ? "..." : isFull ? "Full" : "Book →"}
+                                                                {isLoadingClass ? "..." : isFull ? "Full" : "Book →"}
                                                             </button>
                                                         )}
                                                     </div>
@@ -455,10 +516,8 @@ export default function MemberPage() {
                                                 <div key={p.id} style={{
                                                     background: "var(--surface)",
                                                     border: `1px solid ${isPaid ? "var(--border)" : isPending ? "rgba(255,180,0,0.2)" : "var(--danger-border)"}`,
-                                                    borderRadius: 14,
-                                                    padding: "18px 20px",
+                                                    borderRadius: 14, padding: "18px 20px",
                                                 }}>
-                                                    {/* Top row: plan name + amount */}
                                                     <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
                                                         <div>
                                                             <div style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 700, fontSize: 18, color: "var(--text)", textTransform: "uppercase", marginBottom: 2 }}>
@@ -481,15 +540,10 @@ export default function MemberPage() {
                                                             €{Number(p.amount).toFixed(2)}
                                                         </div>
                                                     </div>
-
-                                                    {/* Bottom row: dates */}
                                                     <div style={{
                                                         display: "grid",
                                                         gridTemplateColumns: p.period_start ? "1fr 1fr 1fr" : "1fr",
-                                                        gap: 12,
-                                                        borderTop: "1px solid var(--border)",
-                                                        paddingTop: 12,
-                                                        marginTop: 4,
+                                                        gap: 12, borderTop: "1px solid var(--border)", paddingTop: 12, marginTop: 4,
                                                     }}>
                                                         <div>
                                                             <div style={{ fontSize: 9, letterSpacing: "0.15em", textTransform: "uppercase", color: "var(--muted2)", marginBottom: 3 }}>Paid on</div>
