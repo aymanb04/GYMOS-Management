@@ -40,6 +40,12 @@ export class ReservationsService {
 
         if (!lesson) throw new NotFoundException('Class not found');
 
+        // Check date not in past
+        const today = new Date().toISOString().split('T')[0];
+        if (reservedDate < today) {
+            throw new BadRequestException('Cannot book a class in the past.');
+        }
+
         // Check for duplicate booking
         const { data: existing } = await service
             .from('reservations')
