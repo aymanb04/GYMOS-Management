@@ -16,7 +16,7 @@ export class ReservationsController {
         return this.reservationsService.getMyBookings(req.token);
     }
 
-    // Member portal: get booking counts + my bookings for a date
+    // Member portal: get booking counts + waitlist counts + my bookings for a date
     @Get('date/:date')
     getClassDataForDate(
         @Param('date') date: string,
@@ -25,7 +25,7 @@ export class ReservationsController {
         return this.reservationsService.getClassDataForDate(date, req.token);
     }
 
-    // Member: book a class
+    // Member: book a class (returns waitlisted: true/false)
     @Post()
     book(
         @Body() dto: { lessonId: string; date: string },
@@ -41,6 +41,15 @@ export class ReservationsController {
         @Req() req: { token: string },
     ) {
         return this.reservationsService.cancel(id, req.token);
+    }
+
+    // Member: leave waitlist
+    @Delete('waitlist/:id')
+    leaveWaitlist(
+        @Param('id') id: string,
+        @Req() req: { token: string },
+    ) {
+        return this.reservationsService.leaveWaitlist(id, req.token);
     }
 
     // Admin: get bookings for a specific lesson + date

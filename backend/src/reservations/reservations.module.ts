@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
-import { ReservationsService } from './reservations.service';
 import { ReservationsController } from './reservations.controller';
+import { ReservationsService } from './reservations.service';
 import { SupabaseModule } from '../supabase.module';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
-    imports: [SupabaseModule],
+    imports: [SupabaseModule, MailModule],
     controllers: [ReservationsController],
     providers: [ReservationsService],
-    exports: [ReservationsService],
 })
 export class ReservationsModule {}

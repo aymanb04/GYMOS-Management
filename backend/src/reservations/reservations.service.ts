@@ -5,10 +5,16 @@ import {
     BadRequestException,
 } from '@nestjs/common';
 import { SupabaseService } from '../supabase.service';
+import { MailService } from '../mail/mail.service';
+
+const WAITLIST_MAX = 20;
 
 @Injectable()
 export class ReservationsService {
-    constructor(private readonly supabase: SupabaseService) {}
+    constructor(
+        private readonly supabase: SupabaseService,
+        private readonly mail: MailService,
+    ) {}
 
     private async getUserProfile(jwt: string) {
         const client = this.supabase.getUserClient(jwt);
@@ -17,7 +23,7 @@ export class ReservationsService {
 
         const { data: profile } = await this.supabase.getServiceClient()
             .from('users')
-            .select('id, gym_id, role')
+            .select('id, gym_id, role, name, email')
             .eq('id', authData.user.id)
             .single();
 
@@ -25,16 +31,12 @@ export class ReservationsService {
         return profile;
     }
 
-    // Timezone-safe local date string (YYYY-MM-DD)
+    // Timezone-safe local date string (YYYY-MM-DD) — Brussels timezone
     private getLocalToday(): string {
-        const now = new Date();
-        const y = now.getFullYear();
-        const m = String(now.getMonth() + 1).padStart(2, '0');
-        const d = String(now.getDate()).padStart(2, '0');
-        return `${y}-${m}-${d}`;
+        return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Brussels' }).format(new Date());
     }
 
-    // Member books a spot in a class for a specific date
+    // ── BOOK ──────────────────────────────────────────────────────────────────
     async book(lessonId: string, reservedDate: string, jwt: string) {
         const profile = await this.getUserProfile(jwt);
         const service = this.supabase.getServiceClient();
@@ -42,20 +44,31 @@ export class ReservationsService {
         // Verify lesson belongs to this gym
         const { data: lesson } = await service
             .from('lessons')
-            .select('id, capacity, capacity_enforced, title')
+            .select('id, capacity, capacity_enforced, title, time_of_day, gym_id')
             .eq('id', lessonId)
             .eq('gym_id', profile.gym_id)
             .single();
 
         if (!lesson) throw new NotFoundException('Class not found');
 
-        // Check date not in past (timezone-safe)
+        // Check date not in past
         const today = this.getLocalToday();
         if (reservedDate < today) {
             throw new BadRequestException('Cannot book a class in the past.');
         }
 
-        // Check for duplicate active booking
+        // Check already on waitlist
+        const { data: onWaitlist } = await service
+            .from('waitlist')
+            .select('id')
+            .eq('lesson_id', lessonId)
+            .eq('user_id', profile.id)
+            .eq('reserved_date', reservedDate)
+            .maybeSingle();
+
+        if (onWaitlist) throw new BadRequestException('You are already on the waitlist for this class.');
+
+        // Check duplicate active booking
         const { data: existing } = await service
             .from('reservations')
             .select('id')
@@ -67,22 +80,47 @@ export class ReservationsService {
 
         if (existing) throw new BadRequestException('You already booked this class.');
 
-        // Check capacity if enforced
-        if (lesson.capacity_enforced) {
-            const { count } = await service
-                .from('reservations')
+        // Check capacity
+        const { count: bookedCount } = await service
+            .from('reservations')
+            .select('id', { count: 'exact', head: true })
+            .eq('lesson_id', lessonId)
+            .eq('reserved_date', reservedDate)
+            .eq('status', 'booked');
+
+        const isFull = lesson.capacity_enforced && (bookedCount ?? 0) >= lesson.capacity;
+
+        if (isFull) {
+            // Add to waitlist
+            const { count: waitlistCount } = await service
+                .from('waitlist')
                 .select('id', { count: 'exact', head: true })
                 .eq('lesson_id', lessonId)
-                .eq('reserved_date', reservedDate)
-                .eq('status', 'booked');
+                .eq('reserved_date', reservedDate);
 
-            if ((count ?? 0) >= lesson.capacity) {
-                throw new BadRequestException('This class is full.');
+            if ((waitlistCount ?? 0) >= WAITLIST_MAX) {
+                throw new BadRequestException('The waitlist for this class is full.');
             }
+
+            const position = (waitlistCount ?? 0) + 1;
+
+            const { data, error } = await service
+                .from('waitlist')
+                .insert({
+                    gym_id: profile.gym_id,
+                    user_id: profile.id,
+                    lesson_id: lessonId,
+                    reserved_date: reservedDate,
+                    position,
+                })
+                .select()
+                .single();
+
+            if (error) throw new Error(error.message);
+            return { ...data, waitlisted: true, position };
         }
 
-        // Check if there's a cancelled reservation for this combination
-        // (reactivate instead of inserting to avoid unique constraint violation)
+        // Reactivate cancelled booking if exists
         const { data: cancelled } = await service
             .from('reservations')
             .select('id')
@@ -101,7 +139,7 @@ export class ReservationsService {
                 .single();
 
             if (error) throw new Error(error.message);
-            return data;
+            return { ...data, waitlisted: false };
         }
 
         // New booking
@@ -118,23 +156,22 @@ export class ReservationsService {
             .single();
 
         if (error) throw new Error(error.message);
-        return data;
+        return { ...data, waitlisted: false };
     }
 
-    // Member cancels their booking
+    // ── CANCEL ────────────────────────────────────────────────────────────────
     async cancel(reservationId: string, jwt: string) {
         const profile = await this.getUserProfile(jwt);
         const service = this.supabase.getServiceClient();
 
         const { data: reservation } = await service
             .from('reservations')
-            .select('id, user_id, gym_id')
+            .select('id, user_id, gym_id, lesson_id, reserved_date')
             .eq('id', reservationId)
             .single();
 
         if (!reservation) throw new NotFoundException('Reservation not found');
 
-        // Members can only cancel their own, admins can cancel any in their gym
         if (profile.role === 'member' && reservation.user_id !== profile.id) {
             throw new ForbiddenException('Not your reservation');
         }
@@ -142,16 +179,163 @@ export class ReservationsService {
             throw new ForbiddenException('Not your gym');
         }
 
+        // Cancel the booking
         const { error } = await service
             .from('reservations')
             .update({ status: 'cancelled' })
             .eq('id', reservationId);
 
         if (error) throw new Error(error.message);
+
+        // Promote first person on waitlist (if any)
+        await this.promoteFromWaitlist(
+            reservation.lesson_id,
+            reservation.reserved_date,
+            reservation.gym_id,
+            service,
+        );
+
         return { message: 'Booking cancelled' };
     }
 
-    // Member gets their upcoming bookings
+    // ── LEAVE WAITLIST ────────────────────────────────────────────────────────
+    async leaveWaitlist(waitlistId: string, jwt: string) {
+        const profile = await this.getUserProfile(jwt);
+        const service = this.supabase.getServiceClient();
+
+        const { data: entry } = await service
+            .from('waitlist')
+            .select('id, user_id, gym_id, lesson_id, reserved_date, position')
+            .eq('id', waitlistId)
+            .single();
+
+        if (!entry) throw new NotFoundException('Waitlist entry not found');
+
+        if (entry.user_id !== profile.id) {
+            throw new ForbiddenException('Not your waitlist entry');
+        }
+
+        // Delete the entry
+        await service.from('waitlist').delete().eq('id', waitlistId);
+
+        // Re-number remaining entries
+        const { data: remaining } = await service
+            .from('waitlist')
+            .select('id')
+            .eq('lesson_id', entry.lesson_id)
+            .eq('reserved_date', entry.reserved_date)
+            .gt('position', entry.position)
+            .order('position', { ascending: true });
+
+        for (let i = 0; i < (remaining ?? []).length; i++) {
+            await service
+                .from('waitlist')
+                .update({ position: entry.position + i })
+                .eq('id', remaining![i].id);
+        }
+
+        return { message: 'Removed from waitlist' };
+    }
+
+    // ── PROMOTE FROM WAITLIST ─────────────────────────────────────────────────
+    private async promoteFromWaitlist(
+        lessonId: string,
+        reservedDate: string,
+        gymId: string,
+        service: any,
+    ) {
+        // Get first person on waitlist
+        const { data: first } = await service
+            .from('waitlist')
+            .select('id, user_id, position')
+            .eq('lesson_id', lessonId)
+            .eq('reserved_date', reservedDate)
+            .order('position', { ascending: true })
+            .limit(1)
+            .maybeSingle();
+
+        if (!first) return; // No one on waitlist
+
+        // Get user details for email
+        const { data: user } = await service
+            .from('users')
+            .select('id, name, email')
+            .eq('id', first.user_id)
+            .single();
+
+        // Get lesson details for email
+        const { data: lesson } = await service
+            .from('lessons')
+            .select('id, title, time_of_day')
+            .eq('id', lessonId)
+            .single();
+
+        // Get gym name for email
+        const { data: gym } = await service
+            .from('gyms')
+            .select('name')
+            .eq('id', gymId)
+            .single();
+
+        // Check if cancelled reservation exists to reactivate
+        const { data: cancelled } = await service
+            .from('reservations')
+            .select('id')
+            .eq('lesson_id', lessonId)
+            .eq('user_id', first.user_id)
+            .eq('reserved_date', reservedDate)
+            .eq('status', 'cancelled')
+            .maybeSingle();
+
+        if (cancelled) {
+            await service
+                .from('reservations')
+                .update({ status: 'booked' })
+                .eq('id', cancelled.id);
+        } else {
+            await service
+                .from('reservations')
+                .insert({
+                    gym_id: gymId,
+                    user_id: first.user_id,
+                    lesson_id: lessonId,
+                    reserved_date: reservedDate,
+                    status: 'booked',
+                });
+        }
+
+        // Remove from waitlist
+        await service.from('waitlist').delete().eq('id', first.id);
+
+        // Re-number remaining waitlist entries
+        const { data: remaining } = await service
+            .from('waitlist')
+            .select('id')
+            .eq('lesson_id', lessonId)
+            .eq('reserved_date', reservedDate)
+            .order('position', { ascending: true });
+
+        for (let i = 0; i < (remaining ?? []).length; i++) {
+            await service
+                .from('waitlist')
+                .update({ position: i + 1 })
+                .eq('id', remaining![i].id);
+        }
+
+        // Send email notification
+        if (user && lesson && gym) {
+            await this.mail.sendWaitlistPromotion({
+                to: user.email,
+                memberName: user.name,
+                gymName: gym.name,
+                lessonTitle: lesson.title,
+                lessonTime: String(lesson.time_of_day).slice(0, 5),
+                date: reservedDate,
+            }).catch(console.error); // Don't fail the cancel if email fails
+        }
+    }
+
+    // ── GET MY BOOKINGS ───────────────────────────────────────────────────────
     async getMyBookings(jwt: string) {
         const profile = await this.getUserProfile(jwt);
         const today = this.getLocalToday();
@@ -172,7 +356,7 @@ export class ReservationsService {
         return data ?? [];
     }
 
-    // Get booking counts per lesson for a specific date (used by member portal)
+    // ── GET BOOKING COUNTS ────────────────────────────────────────────────────
     async getBookingCounts(gymId: string, date: string) {
         const { data, error } = await this.supabase.getServiceClient()
             .from('reservations')
@@ -190,7 +374,22 @@ export class ReservationsService {
         return counts;
     }
 
-    // Get member's bookings for a specific date (to show booked state)
+    // ── GET WAITLIST COUNTS ───────────────────────────────────────────────────
+    async getWaitlistCounts(gymId: string, date: string) {
+        const { data } = await this.supabase.getServiceClient()
+            .from('waitlist')
+            .select('lesson_id')
+            .eq('gym_id', gymId)
+            .eq('reserved_date', date);
+
+        const counts: Record<string, number> = {};
+        for (const r of data ?? []) {
+            counts[r.lesson_id] = (counts[r.lesson_id] ?? 0) + 1;
+        }
+        return counts;
+    }
+
+    // ── GET MY BOOKINGS FOR DATE ──────────────────────────────────────────────
     async getMyBookingsForDate(userId: string, gymId: string, date: string) {
         const { data } = await this.supabase.getServiceClient()
             .from('reservations')
@@ -207,7 +406,38 @@ export class ReservationsService {
         return map;
     }
 
-    // Admin: get all bookings for a specific lesson + date
+    // ── GET MY WAITLIST FOR DATE ──────────────────────────────────────────────
+    async getMyWaitlistForDate(userId: string, gymId: string, date: string) {
+        const { data } = await this.supabase.getServiceClient()
+            .from('waitlist')
+            .select('lesson_id, id, position')
+            .eq('user_id', userId)
+            .eq('gym_id', gymId)
+            .eq('reserved_date', date);
+
+        // map: lessonId -> { id, position }
+        const map: Record<string, { id: string; position: number }> = {};
+        for (const r of data ?? []) {
+            map[r.lesson_id] = { id: r.id, position: r.position };
+        }
+        return map;
+    }
+
+    // ── GET CLASS DATA FOR DATE ───────────────────────────────────────────────
+    async getClassDataForDate(date: string, jwt: string) {
+        const profile = await this.getUserProfile(jwt);
+
+        const [counts, myBookings, waitlistCounts, myWaitlist] = await Promise.all([
+            this.getBookingCounts(profile.gym_id, date),
+            this.getMyBookingsForDate(profile.id, profile.gym_id, date),
+            this.getWaitlistCounts(profile.gym_id, date),
+            this.getMyWaitlistForDate(profile.id, profile.gym_id, date),
+        ]);
+
+        return { counts, myBookings, waitlistCounts, myWaitlist };
+    }
+
+    // ── ADMIN: GET LESSON BOOKINGS ────────────────────────────────────────────
     async getLessonBookings(lessonId: string, date: string, jwt: string) {
         const profile = await this.getUserProfile(jwt);
         if (profile.role !== 'admin' && profile.role !== 'coach') {
@@ -240,17 +470,5 @@ export class ReservationsService {
             ...r,
             user: userMap[r.user_id] ?? { id: r.user_id, name: 'Unknown', email: '' },
         }));
-    }
-
-    // Get booking data for member portal (counts + user's bookings for a date)
-    async getClassDataForDate(date: string, jwt: string) {
-        const profile = await this.getUserProfile(jwt);
-
-        const [counts, myBookings] = await Promise.all([
-            this.getBookingCounts(profile.gym_id, date),
-            this.getMyBookingsForDate(profile.id, profile.gym_id, date),
-        ]);
-
-        return { counts, myBookings };
     }
 }

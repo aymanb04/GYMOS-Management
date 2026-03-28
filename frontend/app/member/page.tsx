@@ -5,6 +5,8 @@ import { useAuth } from "@/context/AuthContext";
 import { useGym } from "@/context/GymContext";
 import { api } from "@/lib/api";
 
+const WAITLIST_MAX = 20;
+
 interface MemberProfile {
     id: string;
     name: string;
@@ -41,6 +43,8 @@ interface Plan {
 interface ClassDateData {
     counts: Record<string, number>;
     myBookings: Record<string, string>;
+    waitlistCounts: Record<string, number>;
+    myWaitlist: Record<string, { id: string; position: number }>;
 }
 
 interface Payment {
@@ -73,27 +77,22 @@ function daysUntil(iso: string | null): number | null {
     return Math.ceil((new Date(iso).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 }
 
-// Get local today as YYYY-MM-DD (Brussels timezone)
 function getLocalToday(): string {
     return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Brussels" }).format(new Date());
 }
 
-// Get local today's day index (0=Mon ... 6=Sun)
 function getLocalTodayIndex(): number {
     const d = new Date().toLocaleDateString("en-US", { timeZone: "Europe/Brussels", weekday: "short" });
     const map: Record<string, number> = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
     return map[d] ?? 0;
 }
 
-// Get date for a given day index + week offset (0=this week, 1=next week)
 function getDateForDay(dayIndex: number, weekOffset: number): string {
     const todayIndex = getLocalTodayIndex();
-    // Start of this week (Monday)
     const now = new Date();
     const localToday = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Brussels" }).format(now);
     const [y, m, d] = localToday.split("-").map(Number);
     const monday = new Date(y, m - 1, d - todayIndex);
-    // Target date = monday + dayIndex + weekOffset * 7
     const target = new Date(monday);
     target.setDate(monday.getDate() + dayIndex + weekOffset * 7);
     const ty = target.getFullYear();
@@ -120,13 +119,15 @@ export default function MemberPage() {
     const [showPlans, setShowPlans]   = useState(false);
     const [historyLoaded, setHistoryLoaded] = useState(false);
 
-    const [classDateData, setClassDateData]   = useState<ClassDateData>({ counts: {}, myBookings: {} });
-    const [bookingLoading, setBookingLoading] = useState<string | null>(null);
-    const [bookingError, setBookingError]     = useState<string | null>(null);
+    const [classDateData, setClassDateData] = useState<ClassDateData>({
+        counts: {}, myBookings: {}, waitlistCounts: {}, myWaitlist: {},
+    });
+    const [bookingLoading, setBookingLoading]   = useState<string | null>(null);
+    const [waitlistLoading, setWaitlistLoading] = useState<string | null>(null);
+    const [bookingError, setBookingError]       = useState<string | null>(null);
 
     const stripeEnabled = !!gym?.features?.stripe_payments;
     const todayIndex = getLocalTodayIndex();
-    const today = getLocalToday();
 
     useEffect(() => {
         Promise.all([
@@ -158,7 +159,7 @@ export default function MemberPage() {
             const res = await api.get<ClassDateData>(`/reservations/date/${date}`);
             setClassDateData(res.data);
         } catch {
-            setClassDateData({ counts: {}, myBookings: {} });
+            setClassDateData({ counts: {}, myBookings: {}, waitlistCounts: {}, myWaitlist: {} });
         }
     }, []);
 
@@ -192,6 +193,19 @@ export default function MemberPage() {
             setBookingError(err?.response?.data?.message ?? "Could not cancel booking.");
         } finally {
             setBookingLoading(null);
+        }
+    };
+
+    const handleLeaveWaitlist = async (waitlistId: string, lessonId: string) => {
+        setWaitlistLoading(lessonId);
+        setBookingError(null);
+        try {
+            await api.delete(`/reservations/waitlist/${waitlistId}`);
+            await fetchClassDataForDay(activeDay, weekOffset);
+        } catch (err: any) {
+            setBookingError(err?.response?.data?.message ?? "Could not leave waitlist.");
+        } finally {
+            setWaitlistLoading(null);
         }
     };
 
@@ -381,7 +395,7 @@ export default function MemberPage() {
                                         This week
                                     </button>
                                     <button
-                                        onClick={() => { setWeekOffset(1); }}
+                                        onClick={() => setWeekOffset(1)}
                                         style={{
                                             padding: "6px 14px", borderRadius: 8, fontSize: 12,
                                             background: weekOffset === 1 ? "var(--accent)" : "var(--surface)",
@@ -444,16 +458,21 @@ export default function MemberPage() {
                                 ) : (
                                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                                         {classesByDay[activeDay].map((c) => {
-                                            const bookedCount = classDateData.counts[c.id] ?? 0;
+                                            const bookedCount     = classDateData.counts[c.id] ?? 0;
+                                            const waitlistCount   = classDateData.waitlistCounts?.[c.id] ?? 0;
                                             const myReservationId = classDateData.myBookings[c.id];
-                                            const isBooked = !!myReservationId;
-                                            const isFull = c.capacity_enforced && bookedCount >= c.capacity;
-                                            const isLoadingClass = bookingLoading === c.id;
+                                            const myWaitlistEntry = classDateData.myWaitlist?.[c.id];
+                                            const isBooked        = !!myReservationId;
+                                            const isOnWaitlist    = !!myWaitlistEntry;
+                                            const isFull          = c.capacity_enforced && bookedCount >= c.capacity;
+                                            const isLoadingClass  = bookingLoading === c.id;
+                                            const isLoadingWait   = waitlistLoading === c.id;
+                                            const waitlistFull    = waitlistCount >= WAITLIST_MAX;
 
                                             return (
                                                 <div key={c.id} style={{
-                                                    background: isBooked ? "var(--accent-subtle)" : "var(--surface)",
-                                                    border: `1px solid ${isBooked ? "var(--accent-border)" : "var(--border)"}`,
+                                                    background: isBooked ? "var(--accent-subtle)" : isOnWaitlist ? "rgba(255,180,0,0.05)" : "var(--surface)",
+                                                    border: `1px solid ${isBooked ? "var(--accent-border)" : isOnWaitlist ? "rgba(255,180,0,0.25)" : "var(--border)"}`,
                                                     borderRadius: 14, padding: "18px 20px",
                                                     display: "flex", alignItems: "center", gap: 16,
                                                 }}>
@@ -466,20 +485,58 @@ export default function MemberPage() {
                                                             {c.duration_minutes && <span>⏱ {c.duration_minutes} min</span>}
                                                             {c.instructor && <span>👤 {c.instructor}</span>}
                                                             <span style={{ color: isFull ? "var(--danger)" : "var(--muted)" }}>
-                                                                👥 {bookedCount}/{c.capacity}{isFull ? " — full" : ""}
+                                                                👥 {bookedCount}/{c.capacity}{isFull ? " — vol" : ""}
                                                             </span>
+                                                            {isFull && waitlistCount > 0 && (
+                                                                <span style={{ color: "#FFB400" }}>
+                                                                    · ⏳ {waitlistCount}/{WAITLIST_MAX} wachtlijst
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     </div>
                                                     <div>
                                                         {isBooked ? (
-                                                            <button onClick={() => handleCancel(myReservationId, c.id)} disabled={isLoadingClass}
-                                                                    style={{ padding: "8px 16px", borderRadius: 8, background: "transparent", border: "1px solid var(--accent-border)", color: "var(--accent)", fontSize: 12, fontFamily: "DM Sans, sans-serif", cursor: "pointer", whiteSpace: "nowrap" }}>
+                                                            <button
+                                                                onClick={() => handleCancel(myReservationId, c.id)}
+                                                                disabled={isLoadingClass}
+                                                                style={{ padding: "8px 16px", borderRadius: 8, background: "transparent", border: "1px solid var(--accent-border)", color: "var(--accent)", fontSize: 12, fontFamily: "DM Sans, sans-serif", cursor: "pointer", whiteSpace: "nowrap" }}
+                                                            >
                                                                 {isLoadingClass ? "..." : "✓ Booked · Cancel"}
                                                             </button>
+                                                        ) : isOnWaitlist ? (
+                                                            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                                                                <span style={{ fontSize: 11, color: "#FFB400", fontWeight: 600 }}>
+                                                                    #{myWaitlistEntry.position} wachtlijst
+                                                                </span>
+                                                                <button
+                                                                    onClick={() => handleLeaveWaitlist(myWaitlistEntry.id, c.id)}
+                                                                    disabled={isLoadingWait}
+                                                                    style={{ padding: "6px 12px", borderRadius: 8, background: "transparent", border: "1px solid rgba(255,180,0,0.3)", color: "#FFB400", fontSize: 11, fontFamily: "DM Sans, sans-serif", cursor: "pointer", whiteSpace: "nowrap" }}
+                                                                >
+                                                                    {isLoadingWait ? "..." : "Verlaat wachtlijst"}
+                                                                </button>
+                                                            </div>
                                                         ) : (
-                                                            <button onClick={() => handleBook(c.id)} disabled={isLoadingClass || isFull}
-                                                                    style={{ padding: "8px 16px", borderRadius: 8, background: isFull ? "transparent" : "var(--accent)", border: isFull ? "1px solid var(--border)" : "none", color: isFull ? "var(--muted2)" : "var(--bg)", fontSize: 12, fontFamily: "DM Sans, sans-serif", fontWeight: 600, cursor: isFull ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}>
-                                                                {isLoadingClass ? "..." : isFull ? "Full" : "Book →"}
+                                                            <button
+                                                                onClick={() => handleBook(c.id)}
+                                                                disabled={isLoadingClass || (isFull && waitlistFull)}
+                                                                style={{
+                                                                    padding: "8px 16px", borderRadius: 8,
+                                                                    background: isFull
+                                                                        ? (waitlistFull ? "transparent" : "rgba(255,180,0,0.15)")
+                                                                        : "var(--accent)",
+                                                                    border: isFull
+                                                                        ? (waitlistFull ? "1px solid var(--border)" : "1px solid rgba(255,180,0,0.3)")
+                                                                        : "none",
+                                                                    color: isFull
+                                                                        ? (waitlistFull ? "var(--muted2)" : "#FFB400")
+                                                                        : "var(--bg)",
+                                                                    fontSize: 12, fontFamily: "DM Sans, sans-serif", fontWeight: 600,
+                                                                    cursor: (isFull && waitlistFull) ? "not-allowed" : "pointer",
+                                                                    whiteSpace: "nowrap",
+                                                                }}
+                                                            >
+                                                                {isLoadingClass ? "..." : isFull ? (waitlistFull ? "Vol" : "Wachtlijst →") : "Book →"}
                                                             </button>
                                                         )}
                                                     </div>
